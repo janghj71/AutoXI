@@ -23,6 +23,7 @@ import VehicleRegistryModal from './VehicleRegistryModal'
 import VehicleSpecificationModal from './VehicleSpecificationModal'
 import WorkOrderModal from './WorkOrderModal'
 import BasicMaintenanceMenu from './BasicMaintenanceMenu'
+import PrintFormatModal from './PrintFormatModal'
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const COVERAGE_OPTIONS = ['자차', '대물']
@@ -1283,6 +1284,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
   const [vehicleRegistryOpen, setVehicleRegistryOpen] = useState(false)
   const [vehicleSpecificationOpen, setVehicleSpecificationOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [printFormatOpen, setPrintFormatOpen] = useState(false)
   const [toolbarMenu, setToolbarMenu] = useState(null)
 
   const workType = row?.type ?? '보험'
@@ -1437,7 +1439,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
         <div className="ml-auto flex items-center gap-2">
           <ToolbarMenu id="estimate" label="견적" icon={FileText} items={ESTIMATE_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} />
           <Button size="sm" onClick={openPhotoViewer}><ImageIcon size={13} />사진</Button>
-          <Button size="sm"><Printer size={13} />서식인쇄</Button>
+          <Button size="sm" onClick={() => setPrintFormatOpen(true)}><Printer size={13} />서식인쇄</Button>
           <Button size="sm"><Send size={13} />견적청구</Button>
         </div>
       </div>
@@ -1494,6 +1496,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
       {vehicleRegistryOpen && <VehicleRegistryModal vehicle={{ carNo: master.carNo, customer: master.customer, carName: master.carName, modelName: master.modelName, vin: master.vin }} onClose={() => setVehicleRegistryOpen(false)} />}
       {vehicleSpecificationOpen && <VehicleSpecificationModal vehicle={{ carNo: master.carNo, vin: master.vin }} onClose={() => setVehicleSpecificationOpen(false)} />}
       {paymentOpen && <PaymentModal sale={{ ...row, id: row?.id ?? '신규', type: row?.type ?? '보험', carNo: master.carNo, customer: master.customer }} onClose={() => setPaymentOpen(false)} />}
+      {printFormatOpen && <PrintFormatModal menuCode="0201" menuName="매출일지" onClose={() => setPrintFormatOpen(false)} />}
     </div>
   )
 }

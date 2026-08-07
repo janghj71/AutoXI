@@ -16,6 +16,7 @@ import VehicleCustomerModal from './VehicleCustomerModal'
 import VehicleRegistryModal from './VehicleRegistryModal'
 import VehicleSpecificationModal from './VehicleSpecificationModal'
 import PaymentModal from './PaymentModal'
+import PrintFormatModal from './PrintFormatModal'
 import { openCenteredWindow } from '../../utils/popup'
 
 const TYPES = ['일반', '경정비', '보험', '보증', '검사']
@@ -128,6 +129,7 @@ export default function SalesJournalPage() {
   const [openMessageMenu, setOpenMessageMenu] = useState(false)
   const [customerOpen, setCustomerOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
+  const [printFormatOpen, setPrintFormatOpen] = useState(false)
   const [vehicleRegistryOpen, setVehicleRegistryOpen] = useState(false)
   const [specificationOpen, setSpecificationOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -265,7 +267,7 @@ export default function SalesJournalPage() {
         </div>
         <span className="mx-0.5 h-5 w-px bg-gray-200" />
         <Button size="sm" disabled={!selected} onClick={() => setPaymentOpen(true)}><Banknote size={14} />입금</Button>
-        <Button size="sm" disabled={!selected}><Printer size={14} />인쇄</Button>
+        <Button size="sm" disabled={!selected} onClick={() => setPrintFormatOpen(true)}><Printer size={14} />인쇄</Button>
         <Button size="sm" disabled={!selected}><FileOutput size={14} />출고</Button>
       </div>
 
@@ -313,6 +315,7 @@ export default function SalesJournalPage() {
 
       {customerOpen && selected && <VehicleCustomerModal key={selected.id} vehicle={selected} hasOwner={selected.ownerLinked} onClose={() => setCustomerOpen(false)} />}
       {paymentOpen && selected && <PaymentModal key={selected.id} sale={selected} onClose={() => setPaymentOpen(false)} />}
+      {printFormatOpen && <PrintFormatModal menuCode="0201" menuName="매출일지" onClose={() => setPrintFormatOpen(false)} />}
       {vehicleRegistryOpen && selected && <VehicleRegistryModal key={selected.id} vehicle={{ carNo: selected.carNo, customer: selected.customer, carName: selected.car, vin: selected.vin }} onClose={() => setVehicleRegistryOpen(false)} />}
       {specificationOpen && selected && <VehicleSpecificationModal key={selected.id} vehicle={{ carNo: selected.carNo, vin: selected.vin }} onClose={() => setSpecificationOpen(false)} />}
 
