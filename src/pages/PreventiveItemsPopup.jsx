@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Search, Trash2 } from 'lucide-react'
+import { CalendarDays, Search, Settings, Trash2 } from 'lucide-react'
 import Button from '../components/Button'
 import FixedHeadTable from '../components/FixedHeadTable'
 import PopupPageShell from '../components/PopupPageShell'
@@ -37,7 +37,7 @@ const ITEM_TYPES = {
 }
 
 const IMAGE_ITEMS = Object.entries(preventiveImages).map(([path, src]) => {
-  const code = path.match(/(\\d+)\\.gif$/)?.[1] || ''
+  const code = path.match(/(\d+)\.gif$/)?.[1] || ''
   const base = BASE_ITEMS.find((item) => item.code === code)
   return { code, name: ITEM_NAMES[code] || base?.name || '', type: ITEM_TYPES[code] || '점검', interval: base?.interval || 0, days: base?.days || 0, image: src }
 })
@@ -84,16 +84,16 @@ export default function PreventiveItemsPopup() {
   const removeManaged = (id) => setManagedRows((prev) => prev.filter((row) => row.id !== id))
 
   const scheduleColumns = [
-    { key: 'code', title: '코드', width: '70px', align: 'center' },
+    { key: 'code', title: '코드', width: '50px', align: 'center' },
     { key: 'name', title: '예방항목명', width: 'minmax(180px, 1fr)' },
     { key: 'interval', title: '주기KM', width: '90px', align: 'right', render: (value) => Number(value || 0).toLocaleString() },
-    { key: 'status', title: '구분', width: '70px', align: 'center' },
+    { key: 'status', title: '구분', width: '60px', align: 'center' },
     { key: 'nextKm', title: '차기KM', width: '95px', align: 'right', render: (value) => Number(value || 0).toLocaleString() },
     { key: 'nextDate', title: '차기일자', width: '105px' },
     { key: '__actions', title: '관리', width: '55px', align: 'center', render: (_value, row) => <button type="button" onClick={(event) => { event.stopPropagation(); removeManaged(row.id) }} className="text-gray-400 hover:text-red-600" aria-label="삭제"><Trash2 size={14} /></button> },
   ]
   const partColumns = [
-    { key: 'code', title: '제조사품번', width: '28%' }, { key: 'name', title: '부품명', width: '36%' },
+    { key: 'code', title: '제조사품번', width: '20%' }, { key: 'name', title: '부품명', width: '42%' },
     { key: 'price', title: '부품액', width: '18%', align: 'right' }, { key: 'labor', title: '공임액', width: '18%', align: 'right' },
   ]
 
@@ -103,12 +103,12 @@ export default function PreventiveItemsPopup() {
         <section className="relative flex w-[300px] shrink-0 min-h-0 flex-col overflow-hidden rounded-md border border-gray-200 bg-white">
           <div className="border-b border-gray-200 px-3 py-2 text-sm font-semibold">예방항목</div>
           <div className="flex h-9 items-center gap-2 border-b border-gray-200 px-2"><Search size={14} className="text-gray-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="항목명 검색" className="min-w-0 flex-1 text-xs outline-none" /></div>
-          <div className="min-h-0 flex-1 overflow-auto p-2"><div className="grid grid-cols-2 gap-2">{IMAGE_ITEMS.filter((item) => !query.trim() || `${item.code} ${item.name}`.includes(query.trim())).map((item) => <button key={item.code} type="button" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setMenu({ item, left: rect.right + 4, top: rect.top }) }} className={`flex min-h-[122px] flex-col items-stretch rounded-md border p-2 text-left hover:border-green-500 hover:bg-green-50 ${selected?.code === item.code ? 'border-green-600 bg-green-50' : 'border-gray-200'}`}><img src={item.image} alt="" className="mx-auto h-16 w-16 shrink-0 object-contain" /><span className="mt-1 min-h-[30px] whitespace-normal text-center text-xs font-semibold leading-tight text-red-500">{item.name || '미등록'}</span></button>)}</div></div>
+          <div className="min-h-0 flex-1 overflow-auto p-2"><div className="grid grid-cols-2 gap-2">{IMAGE_ITEMS.filter((item) => !query.trim() || `${item.code} ${item.name}`.includes(query.trim())).map((item) => <button key={item.code} type="button" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setMenu({ item, left: rect.right + 4, top: rect.top }) }} className={`flex min-h-[100px] flex-col items-stretch rounded-md border p-2 text-left hover:border-green-500 hover:bg-green-50 ${selected?.code === item.code ? 'border-green-600 bg-green-50' : 'border-gray-200'}`}><img src={item.image} alt="" className="mx-auto h-16 w-16 shrink-0 object-contain" /><span className="mt-1 truncate text-center text-xs font-semibold leading-tight text-red-500" title={item.name || '미등록'}>{item.name || '미등록'}</span></button>)}</div></div>
           {menu && <div className="fixed z-50 w-48 rounded-md border border-gray-200 bg-white p-1 text-sm shadow-lg" style={{ left: menu.left, top: menu.top }} onMouseLeave={() => setMenu(null)}><div className="border-b border-gray-100 px-2 py-1 text-xs text-gray-500">{menu.item.name}</div>{CYCLE_OPTIONS.map((cycle) => <button key={cycle.label} type="button" className="block w-full rounded px-2 py-1.5 text-left hover:bg-gray-100" onClick={() => { addManaged(menu.item, cycle); setMenu(null) }}>{cycle.label}</button>)}</div>}
         </section>
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <section className="flex min-h-0 flex-[1.2] flex-col overflow-hidden rounded-md border border-gray-200 bg-white">
-            <div className="flex items-center border-b border-gray-200 px-3 py-2"><div className="text-sm font-semibold">예방항목 목록 <span className="ml-2 text-xs font-normal text-gray-500">차량 예방관리</span></div><Button size="sm" className="ml-auto" onClick={() => setCycleOpen(true)}>주기설정</Button></div>
+            <div className="flex items-center border-b border-gray-200 px-3 py-2"><div className="text-sm font-semibold">차량 예방항목 <span className="ml-2 text-xs font-normal text-gray-500">차량 예방관리</span></div><Button size="sm" className="ml-auto" onClick={() => setCycleOpen(true)}><Settings size={14} />주기설정</Button></div>
             <div className="min-h-0 flex-1"><FixedHeadTable columns={scheduleColumns} rows={managedRows} rowSize="sm" rowKey={(row) => row.id} selectedKey={selectedId} onRowClick={(row) => setSelectedId(row.id)} emptyText="등록된 예방항목이 없습니다." /></div>
           </section>
           <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-gray-200 bg-white">

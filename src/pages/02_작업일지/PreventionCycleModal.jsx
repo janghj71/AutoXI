@@ -14,7 +14,7 @@ const DEFAULT_ROWS = [
   ['117', '휠얼라이먼트', '20,000', '0'], ['112', '앞 브레이크 패드', '30,000', '0'],
 ].map(([code, name, km, days], index) => ({ id: `default-${code}-${index}`, code, name, type: '기본', km, days, sortOrder: index + 1, canDelete: false }))
 
-const inputClass = 'h-9 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/15'
+const inputClass = 'w-full text-xs rounded-sm px-3 py-1.5 border border-gray-300 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-600/15 focus:border-green-400'
 
 export default function PreventionCycleModal({ onClose }) {
   const alert = useAlert()
@@ -67,7 +67,29 @@ export default function PreventionCycleModal({ onClose }) {
     setItemName('')
   }
 
-  const reorderRows = (nextRows) => setRows(nextRows.map((row, index) => ({ ...row, sortOrder: index + 1 })))
+  const reorderRows = (nextRows) => {
+    const rowsByCode = new Map()
+    nextRows.forEach((row) => {
+      const group = rowsByCode.get(row.code) || { defaultRow: null, companyRows: [] }
+      if (row.canDelete) group.companyRows.push(row)
+      else group.defaultRow = row
+      rowsByCode.set(row.code, group)
+    })
+
+    const orderedCodes = []
+    nextRows.forEach((row) => {
+      if (!row.canDelete && !orderedCodes.includes(row.code)) orderedCodes.push(row.code)
+    })
+
+    const groupedRows = orderedCodes.flatMap((code) => {
+      const group = rowsByCode.get(code)
+      return group ? [group.defaultRow, ...group.companyRows].filter(Boolean) : []
+    })
+    const groupedIds = new Set(groupedRows.map((row) => row.id))
+    const reorderedRows = [...groupedRows, ...nextRows.filter((row) => !groupedIds.has(row.id))]
+
+    setRows(reorderedRows.map((row, index) => ({ ...row, sortOrder: index + 1 })))
+  }
 
   const columns = [
     { key: 'code', title: '코드', width: '70px', align: 'center' },
@@ -79,8 +101,8 @@ export default function PreventionCycleModal({ onClose }) {
 
   return (
     <Modal title="예방항목 주기설정" description="기본 예방항목과 업체별 교환 주기를 관리합니다." onClose={onClose} width="max-w-3xl" footer={<><Button onClick={onClose}>닫기</Button></>}>
-      <div className="grid grid-cols-[minmax(0,1fr)_120px_120px_auto] items-end gap-2 border-b border-gray-200 pb-3">
-        <label className="text-xs font-semibold text-gray-700">항목명<input value={itemName} readOnly className={`${inputClass} mt-1 w-full bg-gray-50`} /></label>
+      <div className="grid grid-cols-2 items-start gap-2 border-b border-gray-200 pb-3 [&>label:first-child]:col-span-2 [&>label:first-child]:mb-2 [&>button]:col-span-2 [&>button]:justify-self-end">
+        <label className="text-xs font-semibold text-gray-700">항목명<div className={`${inputClass} mt-1 flex items-center justify-between gap-3 bg-gray-50`}><span className="min-w-0 truncate">{itemName}</span><span className="shrink-0 text-xs font-normal text-gray-500">주기 {selectedRow?.km || '-'} KM{selectedRow?.days && selectedRow.days !== '0' ? ` · ${selectedRow.days}일` : ''}</span></div></label>
         <label className="text-xs font-semibold text-gray-700">교환KM<input value={exchangeKm} onChange={(event) => setExchangeKm(event.target.value.replace(/[^0-9,]/g, ''))} placeholder="KM" className={`${inputClass} mt-1 w-full`} /></label>
         <label className="text-xs font-semibold text-gray-700">교환일수<input value={exchangeDays} onChange={(event) => setExchangeDays(event.target.value.replace(/[^0-9]/g, ''))} placeholder="일" className={`${inputClass} mt-1 w-full`} /></label>
         <Button size="sm" onClick={addCompanyRow} disabled={!selectedRow}><Plus size={14} />주기 추가</Button>

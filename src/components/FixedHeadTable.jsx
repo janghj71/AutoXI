@@ -62,7 +62,7 @@ export default function FixedHeadTable({
   const overlayRef = useRef(null)
   const rowRefs = useRef(new Map())
   const [rowBoxes, setRowBoxes] = useState([])
-  const [dragIndex, setDragIndex] = useState(null)
+  const [dragKey, setDragKey] = useState(null)
 
   const gripCol = draggable ? [{ key: '__grip', width: dragColumnWidth }] : []
   const displayColumns = [...gripCol, ...columns]
@@ -308,12 +308,13 @@ export default function FixedHeadTable({
   }
 
   const onDragEnterRow = (i) => {
-    if (dragIndex === null || dragIndex === i) return
+    if (dragKey == null) return
+    const dragIndex = rows.findIndex((row, index) => rowKey(row, index) === dragKey)
+    if (dragIndex < 0 || dragIndex === i) return
     const next = [...rows]
     const [moved] = next.splice(dragIndex, 1)
     next.splice(i, 0, moved)
     onReorder?.(next)
-    setDragIndex(i)
   }
 
   return (
@@ -409,7 +410,7 @@ export default function FixedHeadTable({
                 const isMarkedSelected = selectedKeys != null && selectedKeys.has(key)
                 const isMultiSel = !isSel && isMarkedSelected
                 const isExpanded = expandedKey != null && key === expandedKey
-                const isDragging = draggable && dragIndex === idx
+                const isDragging = draggable && dragKey != null && rowKey(row, idx) === dragKey
 
                 const rawCustom = getRowClassName ? getRowClassName(row, idx) : ''
                 let customClass = stripBgClasses(rawCustom)
@@ -430,10 +431,10 @@ export default function FixedHeadTable({
                 const dragProps = draggable
                   ? {
                       draggable: true,
-                      onDragStart: () => setDragIndex(idx),
+                      onDragStart: () => setDragKey(rowKey(row, idx)),
                       onDragEnter: () => onDragEnterRow(idx),
                       onDragOver: (e) => e.preventDefault(),
-                      onDragEnd: () => setDragIndex(null),
+                      onDragEnd: () => setDragKey(null),
                     }
                   : {}
 

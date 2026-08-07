@@ -1371,7 +1371,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
       preventiveWinRef.current.postMessage({ type: 'PREVENTIVE_ITEMS_SET_CTX', payload }, globalThis.location.origin)
       return
     }
-    preventiveWinRef.current = openCenteredWindow('/preventive-items', 'preventiveItems', 1200, 900, {
+    preventiveWinRef.current = openCenteredWindow('/preventive-items', 'preventiveItems', 960, 900, {
       windowFeatures: { scrollbars: 'yes', resizable: 'yes' },
       postMessage: { type: 'PREVENTIVE_ITEMS_SET_CTX', payload, attempts: 5, intervals: [0, 200, 600, 1200, 2000] },
     })
