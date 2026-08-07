@@ -1,0 +1,7 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="44" fill="#fffdf8" stroke="#c81e2c" stroke-width="4"/>
+  <text x="34" y="40" font-size="22" text-anchor="middle" fill="#c81e2c" font-family="'Noto Serif KR', 'Malgun Gothic', serif" font-weight="700">澤</text>
+  <text x="66" y="40" font-size="22" text-anchor="middle" fill="#c81e2c" font-family="'Noto Serif KR', 'Malgun Gothic', serif" font-weight="700">李</text>
+  <text x="34" y="72" font-size="22" text-anchor="middle" fill="#c81e2c" font-family="'Noto Serif KR', 'Malgun Gothic', serif" font-weight="700">海</text>
+  <text x="66" y="72" font-size="22" text-anchor="middle" fill="#c81e2c" font-family="'Noto Serif KR', 'Malgun Gothic', serif" font-weight="700">印</text>
+</svg>
