@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Banknote, BellRing, BookOpen, CalendarDays, Camera, Car, ChevronDown, ChevronLeft, ChevronRight,
-  ClipboardCheck, ClipboardList, FileOutput, MessageSquare, NotebookPen, Plus,
+  ArrowLeft, Banknote, BellRing, BookOpen, CalendarDays, Camera, Car, ChevronDown, ChevronLeft, ChevronRight,
+  ClipboardCheck, ClipboardList, FileOutput, FileText, MessageSquare, NotebookPen, Plus,
   MoreVertical, Pencil, Printer, Search, Send, Trash2, UserRound, X,
 } from 'lucide-react'
 import { useAlert } from '../../alerts'
@@ -195,8 +195,8 @@ export default function SalesJournalPage() {
     const rect = event.currentTarget.getBoundingClientRect()
     setOpenMenu((prev) => prev?.id === row.id ? null : {
       id: row.id,
-      left: Math.max(8, rect.right - 128),
-      top: rect.bottom + 140 > globalThis.innerHeight ? Math.max(8, rect.top - 136) : rect.bottom + 4,
+      left: Math.max(8, rect.right - 160),
+      top: rect.bottom + 284 > globalThis.innerHeight ? Math.max(8, rect.top - 284) : rect.bottom + 4,
     })
   }
   const mainColumns = [
@@ -280,6 +280,7 @@ export default function SalesJournalPage() {
           enableHorizontalScroll={historyOpen}
           selectedKey={selectedId}
           onRowClick={(row) => setSelectedId(row.id)}
+          onRowDoubleClick={(row) => setEditingRow(row)}
           emptyText="조건에 맞는 매출일지가 없습니다."
         />
       </div>
@@ -305,11 +306,20 @@ export default function SalesJournalPage() {
 
       {openMenu && <>
         <button type="button" aria-label="관리 메뉴 닫기" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpenMenu(null)} />
-        <div className="fixed z-50 w-32 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 text-left shadow-lg" style={{ left: openMenu.left, top: openMenu.top }}>
+        <div className="fixed z-50 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 text-left shadow-lg" style={{ left: openMenu.left, top: openMenu.top }}>
           {[
-            { label: '사진', icon: Camera }, { label: '메모', icon: NotebookPen }, { label: '차량점검', icon: ClipboardCheck },
+            { label: '사진', icon: Camera },
+            { label: '메모', icon: NotebookPen },
+            { separator: true },
             { label: '삭제', icon: Trash2, danger: true },
-          ].map(({ label, icon: Icon, danger }) => <button key={label} type="button" onClick={() => { if (label === '사진') openPhotoViewer(rows.find((row) => row.id === openMenu.id)); setOpenMenu(null) }} className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${danger ? 'text-red-600' : 'text-gray-700'}`}><Icon size={14} />{label}</button>)}
+            { separator: true },
+            { label: '차량점검', icon: ClipboardCheck },
+            { separator: true },
+            { label: '견적이동', icon: ArrowLeft },
+            { label: '견적보관', icon: FileText },
+          ].map((item, index) => item.separator
+            ? <div key={`separator-${index}`} className="my-1 border-t border-gray-100" />
+            : <button key={item.label} type="button" onClick={() => { if (item.label === '사진') openPhotoViewer(rows.find((row) => row.id === openMenu.id)); setOpenMenu(null) }} className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${item.danger ? 'text-red-600' : 'text-gray-700'}`}><item.icon size={14} />{item.label}</button>)}
         </div>
       </>}
 

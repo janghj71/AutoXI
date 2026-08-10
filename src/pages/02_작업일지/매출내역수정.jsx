@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft, ArrowRight, ArrowUpDown, Banknote, Car, CheckCircle2, ChevronDown, ClipboardEdit, FileText, FlaskConical,
+  ArrowRight, ArrowUpDown, Banknote, Car, CheckCircle2, ChevronDown, ClipboardEdit, FileText, FlaskConical,
   Image as ImageIcon, Paintbrush, Plus, Printer, Radio, Save, Search, Send, Sparkles, Trash2,
   Ruler, UserRound, Wrench, X,
 } from 'lucide-react'
@@ -24,6 +24,8 @@ import VehicleSpecificationModal from './VehicleSpecificationModal'
 import WorkOrderModal from './WorkOrderModal'
 import BasicMaintenanceMenu from './BasicMaintenanceMenu'
 import PrintFormatModal from './PrintFormatModal'
+import EstimateItemsModal from './EstimateItemsModal'
+import PartsPurchaseModal from './PartsPurchaseModal'
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const COVERAGE_OPTIONS = ['자차', '대물']
@@ -108,10 +110,6 @@ const PART_MENU_ITEMS = [
   { label: '출고부품', icon: Send },
   { label: '중고부품', icon: Search },
   { label: '수입차 부품', icon: Search },
-]
-const ESTIMATE_MENU_ITEMS = [
-  { label: '견적이동', icon: ArrowLeft },
-  { label: '견적보관', icon: FileText },
 ]
 const money = (value) => (value || 0).toLocaleString('ko-KR')
 
@@ -519,12 +517,12 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
     const createdAt = Date.now()
     const nextRows = suggestedRows.map((row, index) => ({
       id: `${source}-${createdAt}-${index}`,
-      kind: String(row.work || '').startsWith('도장') ? '도장' : '주체',
+      kind: row.kind === '공임' ? '주체' : row.kind || (String(row.work || '').startsWith('도장') ? '도장' : row.partAmt ? '부품' : '주체'),
       manufacturerCode: row.partCode || '',
       content: row.content,
       work: String(row.work || '').split('·')[0],
       hour: String(row.hour ?? ''),
-      unitPrice: 0,
+      unitPrice: Number(row.unitPrice || 0),
       partAmt: Number(row.partAmt || 0),
       laborAmt: Number(row.laborAmt || 0),
       worker: '',
@@ -534,7 +532,7 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
       partType: row.partAmt ? 'A' : '',
       releaseDate: '',
       pointPolicy: row.partAmt ? '미적용(부품)' : '적용',
-      supplier: '',
+      supplier: row.supplier || '',
     }))
     setRows((prev) => [...prev, ...nextRows])
     setSelectedId(nextRows.at(-1)?.id ?? null)
@@ -1285,6 +1283,8 @@ export default function SalesDetailEditPage({ row, onBack }) {
   const [vehicleSpecificationOpen, setVehicleSpecificationOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [printFormatOpen, setPrintFormatOpen] = useState(false)
+  const [estimateItemsOpen, setEstimateItemsOpen] = useState(false)
+  const [partsPurchaseOpen, setPartsPurchaseOpen] = useState(false)
   const [toolbarMenu, setToolbarMenu] = useState(null)
 
   const workType = row?.type ?? '보험'
@@ -1431,13 +1431,12 @@ export default function SalesDetailEditPage({ row, onBack }) {
       </div>
 
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
-        <ToolbarMenu id="labor" label="공임" icon={Wrench} items={LABOR_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} onItemClick={(itemLabel) => { if (itemLabel === '공임항목') openLaborItems(); if (itemLabel === '도장항목') openPaintItems(); if (itemLabel === '케미칼항목') openChemicalItems() }} />
-        <ToolbarMenu id="parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} />
+        <ToolbarMenu id="labor" label="공임" icon={Wrench} items={LABOR_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} onItemClick={(itemLabel) => { if (itemLabel === '공임항목') openLaborItems(); if (itemLabel === '도장항목') openPaintItems(); if (itemLabel === '케미칼항목') openChemicalItems(); if (itemLabel === '견적항목') setEstimateItemsOpen(true) }} />
+        <ToolbarMenu id="parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} onItemClick={(itemLabel) => { if (itemLabel === '소요부품') setPartsPurchaseOpen(true) }} />
         <Button size="sm" onClick={openPreventiveItems}><CheckCircle2 size={13} />예방</Button>
         <span className="h-5 w-px bg-gray-200" />
         <Button size="sm"><CheckCircle2 size={13} />중복체크</Button>
         <div className="ml-auto flex items-center gap-2">
-          <ToolbarMenu id="estimate" label="견적" icon={FileText} items={ESTIMATE_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} />
           <Button size="sm" onClick={openPhotoViewer}><ImageIcon size={13} />사진</Button>
           <Button size="sm" onClick={() => setPrintFormatOpen(true)}><Printer size={13} />서식인쇄</Button>
           <Button size="sm"><Send size={13} />견적청구</Button>
@@ -1497,6 +1496,8 @@ export default function SalesDetailEditPage({ row, onBack }) {
       {vehicleSpecificationOpen && <VehicleSpecificationModal vehicle={{ carNo: master.carNo, vin: master.vin }} onClose={() => setVehicleSpecificationOpen(false)} />}
       {paymentOpen && <PaymentModal sale={{ ...row, id: row?.id ?? '신규', type: row?.type ?? '보험', carNo: master.carNo, customer: master.customer }} onClose={() => setPaymentOpen(false)} />}
       {printFormatOpen && <PrintFormatModal menuCode="0201" menuName="매출일지" onClose={() => setPrintFormatOpen(false)} />}
+      {estimateItemsOpen && <EstimateItemsModal vehicle={{ carNo: master.carNo, carName: master.carName }} onClose={() => setEstimateItemsOpen(false)} onApply={(estimateRows) => appendSuggestedRows(estimateRows, 'estimate')} />}
+      {partsPurchaseOpen && <PartsPurchaseModal onClose={() => setPartsPurchaseOpen(false)} onApply={(partRow) => appendSuggestedRows([partRow], 'purchase')} />}
     </div>
   )
 }
