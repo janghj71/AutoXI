@@ -26,6 +26,7 @@ import BasicMaintenanceMenu from './BasicMaintenanceMenu'
 import PrintFormatModal from './PrintFormatModal'
 import EstimateItemsModal from './EstimateItemsModal'
 import PartsPurchaseModal from './PartsPurchaseModal'
+import InventoryPartsModal from './InventoryPartsModal'
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const COVERAGE_OPTIONS = ['자차', '대물']
@@ -1285,6 +1286,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
   const [printFormatOpen, setPrintFormatOpen] = useState(false)
   const [estimateItemsOpen, setEstimateItemsOpen] = useState(false)
   const [partsPurchaseOpen, setPartsPurchaseOpen] = useState(false)
+  const [inventoryPartsOpen, setInventoryPartsOpen] = useState(false)
   const [toolbarMenu, setToolbarMenu] = useState(null)
 
   const workType = row?.type ?? '보험'
@@ -1432,7 +1434,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
 
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
         <ToolbarMenu id="labor" label="공임" icon={Wrench} items={LABOR_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} onItemClick={(itemLabel) => { if (itemLabel === '공임항목') openLaborItems(); if (itemLabel === '도장항목') openPaintItems(); if (itemLabel === '케미칼항목') openChemicalItems(); if (itemLabel === '견적항목') setEstimateItemsOpen(true) }} />
-        <ToolbarMenu id="parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} onItemClick={(itemLabel) => { if (itemLabel === '소요부품') setPartsPurchaseOpen(true) }} />
+        <ToolbarMenu id="parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} onItemClick={(itemLabel) => { if (itemLabel === '소요부품') setPartsPurchaseOpen(true); if (itemLabel === '재고부품') setInventoryPartsOpen(true) }} />
         <Button size="sm" onClick={openPreventiveItems}><CheckCircle2 size={13} />예방</Button>
         <span className="h-5 w-px bg-gray-200" />
         <Button size="sm"><CheckCircle2 size={13} />중복체크</Button>
@@ -1498,6 +1500,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
       {printFormatOpen && <PrintFormatModal menuCode="0201" menuName="매출일지" onClose={() => setPrintFormatOpen(false)} />}
       {estimateItemsOpen && <EstimateItemsModal vehicle={{ carNo: master.carNo, carName: master.carName }} onClose={() => setEstimateItemsOpen(false)} onApply={(estimateRows) => appendSuggestedRows(estimateRows, 'estimate')} />}
       {partsPurchaseOpen && <PartsPurchaseModal onClose={() => setPartsPurchaseOpen(false)} onApply={(partRow) => appendSuggestedRows([partRow], 'purchase')} />}
+      {inventoryPartsOpen && <InventoryPartsModal vehicleName={master.carName} onClose={() => setInventoryPartsOpen(false)} onApply={(partRow) => appendSuggestedRows([partRow], 'inventory')} />}
     </div>
   )
 }

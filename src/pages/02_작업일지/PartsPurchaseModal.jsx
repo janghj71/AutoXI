@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PackageSearch } from 'lucide-react'
+import { Check, PackageSearch } from 'lucide-react'
 import Button from '../../components/Button'
 import FixedHeadTable from '../../components/FixedHeadTable'
 import Modal from '../../components/Modal'
@@ -40,10 +40,12 @@ export default function PartsPurchaseModal({ onClose, onApply }) {
       return matchesSupplier && matchesQuery
     })
   }, [query, supplier])
+  const selectedRow = PURCHASE_ROWS.find((row) => row.id === selectedId) || null
 
   const salePrice = (row) => Math.round(row.purchasePrice * (Number(rate) || 0))
 
-  const handleDoubleClick = (row) => {
+  const applyRow = (row) => {
+    if (!row) return
     onApply?.({
       kind: '부품',
       partCode: row.partCode,
@@ -58,9 +60,11 @@ export default function PartsPurchaseModal({ onClose, onApply }) {
     onClose?.()
   }
 
+  const handleDoubleClick = (row) => applyRow(row)
+
   const columns = [
-    { key: 'supplier', title: '매입처명', width: '110px' },
-    { key: 'date', title: '매입일자', width: '95px' },
+    { key: 'supplier', title: '매입처명', width: '140px' },
+    { key: 'date', title: '매입일자', width: '110px' },
     { key: 'partCode', title: '제작사코드', width: '125px' },
     { key: 'name', title: '부품명', width: 'minmax(160px, 1fr)' },
     { key: 'quantity', title: '수량', width: '58px', align: 'right' },
@@ -75,20 +79,20 @@ export default function PartsPurchaseModal({ onClose, onApply }) {
       title={<span className="inline-flex items-center gap-1.5"><PackageSearch size={16} className="text-green-600" />소요부품</span>}
       description="매입목록에서 부품을 선택해 매출내역에 추가합니다."
       onClose={onClose}
-      width="max-w-6xl"
-      footer={<Button onClick={onClose}>닫기</Button>}
+      width="max-w-5xl"
+      footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" disabled={!selectedRow} onClick={() => applyRow(selectedRow)}><Check size={14} />선택</Button></>}
     >
       <div className="flex h-[620px] min-h-0 flex-col gap-3">
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="매입처명, 제작사코드, 부품명 검색" className="h-9 min-w-[260px] flex-1 rounded-sm border border-gray-300 bg-white px-3 text-xs text-gray-800 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-600/15" />
-          <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1">
-            {suppliers.map((item) => <button key={item} type="button" onClick={() => setSupplier(item)} className={`shrink-0 rounded-sm border px-2.5 py-1.5 text-xs font-medium ${supplier === item ? 'border-green-600 bg-green-600 text-white' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}>{item}</button>)}
-          </div>
+        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto pb-1">
+          {suppliers.map((item) => <button key={item} type="button" onClick={() => setSupplier(item)} className={`shrink-0 rounded-sm border px-2.5 py-1.5 text-xs font-medium ${supplier === item ? 'border-green-600 bg-green-600 text-white' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}>{item}</button>)}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="whitespace-nowrap text-xs font-semibold text-gray-700">판매단가 = 매입단가 × 배율</span>
-          <input value={rate} onChange={(event) => setRate(event.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" className="h-8 w-16 rounded-sm border border-gray-300 bg-white px-2 text-right text-xs text-gray-800 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-600/15" aria-label="판매단가 배율" />
+        <div className="flex shrink-0 items-center justify-between gap-4">
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="매입처명, 제작사코드, 부품명 검색" className="w-full min-w-0 max-w-[420px] rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-600/15" />
+          <label className="inline-flex shrink-0 items-center gap-2 text-xs font-semibold text-gray-700">
+            <span className="whitespace-nowrap">판매단가 = 매입단가 × 배율</span>
+            <input value={rate} onChange={(event) => setRate(event.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" className="w-16 rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-right text-xs font-normal text-gray-800 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-600/15" aria-label="판매단가 배율" />
+          </label>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-gray-200">
