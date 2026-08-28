@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, Sparkles } from 'lucide-react'
+import { Check, Sparkles } from 'lucide-react'
 import Button from '../../components/Button'
 import FixedHeadTable from '../../components/FixedHeadTable'
 import Modal from '../../components/Modal'
@@ -50,8 +50,6 @@ const money = (value) => Number(value || 0).toLocaleString('ko-KR')
 export default function AiEstimateModal({ carName, onClose, onSelect }) {
   const vehicleNames = [...new Set(ESTIMATES.map((row) => row.carName))]
   const initialVehicle = vehicleNames.includes(carName) ? carName : vehicleNames[0]
-  const [query, setQuery] = useState('')
-  const [appliedQuery, setAppliedQuery] = useState('')
   const [selectedVehicle, setSelectedVehicle] = useState(initialVehicle)
   const [selectedScopes, setSelectedScopes] = useState(new Set())
   const [selectedId, setSelectedId] = useState(
@@ -64,14 +62,12 @@ export default function AiEstimateModal({ carName, onClose, onSelect }) {
   )
 
   const filteredRows = useMemo(() => {
-    const keyword = appliedQuery.trim().toLowerCase()
     return ESTIMATES.filter((row) => {
       if (row.carName !== selectedVehicle) return false
-      if (keyword && ![row.carName, ...row.scopes].some((value) => value.toLowerCase().includes(keyword))) return false
       if (selectedScopes.size > 0 && ![...selectedScopes].every((scope) => row.scopes.includes(scope))) return false
       return true
     })
-  }, [appliedQuery, selectedScopes, selectedVehicle])
+  }, [selectedScopes, selectedVehicle])
 
   const selected = filteredRows.find((row) => row.id === selectedId) ?? filteredRows[0] ?? null
   const details = selected?.details ?? []
@@ -117,19 +113,7 @@ export default function AiEstimateModal({ carName, onClose, onSelect }) {
       description="차량명과 사고부위가 유사한 공유 견적을 조회하여 작업목록에 반영합니다."
       width="max-w-6xl"
       onClose={onClose}
-      footer={(
-        <div className="flex w-full items-center gap-3">
-          <div className="min-w-0 flex-1 text-xs text-gray-500">
-            <div className="truncate">선택된 항목: <strong className="text-gray-800">{selected ? `${selected.carName} · ${selected.scopes.join(', ')}` : '-'}</strong></div>
-            <div className="mt-1 flex gap-4">
-              <span>공임합계: <strong className="text-gray-700">{money(laborTotal)}</strong></span>
-              <span>부품합계: <strong className="text-gray-700">{money(partTotal)}</strong></span>
-            </div>
-          </div>
-          <Button onClick={onClose}>취소</Button>
-          <Button variant="primary" disabled={!selected} onClick={() => { onSelect?.(details, selected); onClose() }}>선택</Button>
-        </div>
-      )}
+      footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" size="md" disabled={!selected} onClick={() => { onSelect?.(details, selected); onClose() }}><Check size={14} />선택</Button></>}
     >
       <div className="grid h-[680px] max-h-[calc(100vh-180px)] min-h-0 grid-cols-[190px_minmax(0,1fr)] overflow-hidden rounded-lg border border-gray-200">
         <aside className="flex min-h-0 flex-col border-r border-gray-200 bg-gray-50">
@@ -162,15 +146,7 @@ export default function AiEstimateModal({ carName, onClose, onSelect }) {
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-col bg-white">
-          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-gray-200 px-3">
-            <div className="flex h-8 w-80 items-center gap-2 rounded-md border border-gray-300 px-3 focus-within:border-green-400 focus-within:ring-2 focus-within:ring-green-600/15">
-              <Search size={14} className="text-gray-400" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') setAppliedQuery(query) }}
-                placeholder="차량명 또는 사고부위 검색" className="min-w-0 flex-1 bg-transparent text-xs outline-none" />
-            </div>
-            <Button size="sm" onClick={() => setAppliedQuery(query)}><Search size={14} />검색</Button>
-          </div>
+          <div className="flex h-12 shrink-0 items-center gap-4 border-b border-gray-200 px-3 text-xs text-gray-500"><div className="min-w-0 flex-1 truncate">선택된 항목: <strong className="text-gray-800">{selected ? `${selected.carName} · ${selected.scopes.join(', ')}` : '-'}</strong></div><div className="flex shrink-0 gap-4"><span>공임합계: <strong className="text-gray-700">{money(laborTotal)}</strong></span><span>부품합계: <strong className="text-gray-700">{money(partTotal)}</strong></span></div></div>
           <section className="h-[265px] shrink-0 border-b border-gray-200 p-3">
             <div className="h-full overflow-hidden rounded-md border border-gray-200">
               <FixedHeadTable

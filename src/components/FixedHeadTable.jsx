@@ -21,7 +21,9 @@ export default function FixedHeadTable({
   height = 200, // body 영역 높이(px)
   className = '',
   headerClassName = '',
+  headerTextClass = 'text-sm',
   headerGroups = [], // [{ title, keys: ['col1', 'col2'] }] — 지정 시 2단 그룹 헤더
+  headerRows = null, // 사용자 정의 헤더 행 — [{ key, title, rowSpan, colSpan, align }]
   bodyClassName = '',
   tableTextClass = 'text-sm',
   emptyText = '데이터가 없습니다.',
@@ -42,6 +44,7 @@ export default function FixedHeadTable({
   wheelSelect = true, // 휠로 선택이동 사용 여부
   wheelSelectStep = 1,
   rowRenderer,
+  measureRenderedRowGroup = false,
   enableHorizontalScroll = false,
   getGutterRowClass, // (key) => className — 행별 gutter 배경색 (optional)
   onHeaderClick,
@@ -130,13 +133,17 @@ export default function FixedHeadTable({
       if (!wrap) return
 
       const next = []
+      const tbodyHeight = tbody?.scrollHeight || 0
       for (let i = 0; i < rows.length; i++) {
         const key = rowKey(rows[i], i)
         const tr = rowRefs.current.get(key)
         if (!tr) continue
-        const h = Math.round(tr.getBoundingClientRect().height)
         // offsetTop은 "확장 row(tr)"가 중간에 끼어도 누적 높이가 반영됨
         const top = tr.offsetTop
+        const nextTr = i + 1 < rows.length ? rowRefs.current.get(rowKey(rows[i + 1], i + 1)) : null
+        const h = measureRenderedRowGroup
+          ? Math.round((nextTr?.offsetTop ?? tbodyHeight) - top)
+          : Math.round(tr.getBoundingClientRect().height)
         next.push({ key, top, height: h })
       }
       setRowBoxes(next)
@@ -165,7 +172,7 @@ export default function FixedHeadTable({
       ro.disconnect()
       mo.disconnect()
     }
-  }, [rows, columns, expandedKey, selectedKey, rowKey])
+  }, [rows, columns, expandedKey, selectedKey, rowKey, measureRenderedRowGroup])
 
   // 가로 스크롤 동기화
   const onBodyScroll = () => {
@@ -325,10 +332,25 @@ export default function FixedHeadTable({
         className={'overflow-hidden bg-gray-100 border-b border-gray-200 ' + headerClassName}
         style={{ paddingRight: gutterW }}
       >
-        <table className="w-full table-fixed text-sm" style={{ minWidth: minTableWidth }}>
+        <table className={`w-full table-fixed ${headerTextClass}`} style={{ minWidth: minTableWidth }}>
           {colgroup}
           <thead className="text-gray-600">
-            {hasGroupedHeader ? (
+            {headerRows ? (
+              headerRows.map((row, rowIndex) => (
+                <tr key={`custom-header-${rowIndex}`} className={`${thBase} [&>th]:border-b [&>th]:border-gray-200 [&>th]:font-semibold [&>th]:whitespace-nowrap`}>
+                  {row.map((cell, cellIndex) => (
+                    <th
+                      key={cell.key || `${rowIndex}-${cellIndex}`}
+                      rowSpan={cell.rowSpan}
+                      colSpan={cell.colSpan}
+                      className={[thAlign(cell.align), cell.headerClassName || '', 'align-middle'].join(' ')}
+                    >
+                      {cell.title}
+                    </th>
+                  ))}
+                </tr>
+              ))
+            ) : hasGroupedHeader ? (
               <>
                 <tr className={`${thBase} [&>th]:border-b [&>th]:border-gray-200 [&>th]:font-semibold [&>th]:whitespace-nowrap`}>
                   {draggable && <th rowSpan={2}></th>}
@@ -336,7 +358,7 @@ export default function FixedHeadTable({
                     const group = groupByKey.get(column.key)
                     if (group && group.keys[0] !== column.key) return null
                     if (group) {
-                      return <th key={group.title} colSpan={group.keys.length} className="text-center">{group.title}</th>
+                      return <th key={group.title} colSpan={group.keys.length} className={[thAlign(group.align || 'center'), group.headerClassName || ''].join(' ')}>{group.title}</th>
                     }
                     return (
                     <th key={column.key} rowSpan={2} className={[thAlign(column.align), column.headerClassName || '', 'align-middle'].join(' ')} title={typeof column.title === 'string' ? column.title : undefined}>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Search, Settings, Trash2 } from 'lucide-react'
+import { CalendarDays, Check, Search, Settings, Trash2 } from 'lucide-react'
 import Button from '../components/Button'
 import FixedHeadTable from '../components/FixedHeadTable'
 import PopupPageShell from '../components/PopupPageShell'
@@ -112,10 +112,10 @@ export default function PreventiveItemsPopup() {
             <div className="min-h-0 flex-1"><FixedHeadTable columns={scheduleColumns} rows={managedRows} rowSize="sm" rowKey={(row) => row.id} selectedKey={selectedId} onRowClick={(row) => setSelectedId(row.id)} emptyText="등록된 예방항목이 없습니다." /></div>
           </section>
           <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-gray-200 bg-white">
-            <div className="flex items-center border-b border-gray-200 px-3 py-2"><div className="text-sm font-semibold">예방부품 <span className="ml-2 text-xs font-normal text-gray-500">연결코드: {selected?.code || '-'}</span></div><Button variant="primary" size="sm" className="ml-auto">부품 추가</Button></div>
+            <div className="flex items-center border-b border-gray-200 px-3 py-2"><div className="text-sm font-semibold">예방부품 <span className="ml-2 text-xs font-normal text-gray-500">연결코드: {selected?.code || '-'}</span></div><Button variant="primary" size="sm" className="ml-auto" disabled={!selected}><Check size={14} />선택</Button></div>
             <div className="min-h-0 flex-1"><FixedHeadTable columns={partColumns} rows={selected ? PARTS : []} rowSize="sm" rowKey={(row) => row.id} emptyText="연결된 부품이 없습니다." /></div>
           </section>
-          <div className="flex shrink-0 items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2"><div className="flex items-center gap-2 text-xs text-gray-600"><CalendarDays size={14} className="text-gray-400" />차기 교환 예정: <strong className="text-gray-900">{selected ? `${Number(selected.nextKm).toLocaleString()} KM · ${selected.nextDate}` : '-'}</strong></div><Button variant="primary" size="sm">매출내역에 추가</Button></div>
+          <div className="flex shrink-0 items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2"><div className="flex items-center gap-2 text-xs text-gray-600"><CalendarDays size={14} className="text-gray-400" /><span>예방항목: <strong className="text-gray-900">{selected?.name || '-'}</strong></span><span className="text-gray-300">·</span><span>차기 교환 예정: <strong className="text-gray-900">{selected ? `${Number(selected.nextKm).toLocaleString()} KM · ${selected.nextDate}` : '-'}</strong></span></div><Button variant="primary" size="sm">매출내역에 추가</Button></div>
         </div>
       </div>
       {cycleOpen && <PreventionCycleModal onClose={() => setCycleOpen(false)} />}

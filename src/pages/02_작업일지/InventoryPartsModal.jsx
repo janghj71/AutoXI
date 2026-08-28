@@ -121,7 +121,7 @@ export default function InventoryPartsModal({ vehicleName = '', onClose, onApply
       description={<span>차량명: {vehicleName || '-'}</span>}
       onClose={onClose}
       width="max-w-5xl"
-      footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" disabled={!selected} onClick={() => apply(selected)}><Check size={14} />선택</Button></>}
+      footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" size="md" disabled={!selected} onClick={() => apply(selected)}><Check size={14} />선택</Button></>}
     >
       <div className="flex h-[620px] min-h-0 flex-col gap-3">
         <div className="flex shrink-0 flex-wrap items-center gap-2">

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ClipboardCheck, ClipboardList } from 'lucide-react'
+import { Check, ClipboardList } from 'lucide-react'
 import { useAlert } from '../../alerts'
 import Button from '../../components/Button'
 import FixedHeadTable from '../../components/FixedHeadTable'
@@ -67,7 +67,7 @@ export default function EstimateItemsModal({ vehicle, onClose, onApply }) {
       description={`차량번호: ${vehicle?.carNo || '-'} · 차량명: ${vehicle?.carName || '-'}`}
       onClose={onClose}
       width="max-w-4xl"
-      footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" disabled={!selected || detailRows.length === 0} onClick={apply}><ClipboardCheck size={14} />불러오기</Button></>}
+      footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" size="md" disabled={!selected || detailRows.length === 0} onClick={apply}><Check size={14} />선택</Button></>}
     >
       <div className="grid h-[620px] min-h-0 grid-rows-[250px_minmax(0,1fr)] gap-3">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-md border border-gray-200">

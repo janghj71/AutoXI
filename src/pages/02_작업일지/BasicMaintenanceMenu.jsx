@@ -3,64 +3,74 @@ import { useEffect, useState } from 'react'
 // 화면 구현 단계의 기본정비 코드입니다. API 연결 시 이 배열만 조회 데이터로 교체합니다.
 const BASIC_MAINTENANCE_CATEGORIES = [
   {
-    value: 'engine',
-    label: '엔진·오일',
+    value: 'm_cate1',
+    label: '정형작업',
+    
+  },
+  {
+    value: 'm_cate2',
+    label: '차체고정',
     items: [
-      { value: 'X0101', label: '엔진오일 교환', defValue: '0.5' },
-      { value: 'X0102', label: '엔진오일 필터 교환', defValue: '0.3' },
-      { value: 'X0103', label: '에어클리너 교환', defValue: '0.3' },
+      { value: 'X0101', label: 'Car-Oliner', defValue: '0.5' },
+      { value: 'X0102', label: 'Car-Oliner(엔진-뒤서스펜션탈거시)', defValue: '0.3' },
+      { value: 'X0103', label: 'Data liner', defValue: '0.3' },
     ],
   },
   {
-    value: 'mission',
-    label: '변속기·구동',
+    value: 'm_cate3',
+    label: '차체계측',
     items: [
-      { value: 'X0201', label: '자동변속기 오일 교환', defValue: '0.8' },
-      { value: 'X0202', label: '수동변속기 오일 교환', defValue: '0.7' },
-      { value: 'X0203', label: '디퍼렌셜 오일 교환', defValue: '0.7' },
+      { value: 'X0201', label: '차체 2D계측', defValue: '0.8' },
+      { value: 'X0202', label: '차체 3D계측', defValue: '0.7' },
+      { value: 'X0203', label: '이동형(리프팅포함)', defValue: '0.7' },
     ],
   },
   {
-    value: 'brake',
-    label: '브레이크',
+    value: 'm_cate4',
+    label: '차체수정',
     items: [
-      { value: 'X0301', label: '앞 브레이크 패드 교환', defValue: '0.8' },
-      { value: 'X0302', label: '뒤 브레이크 패드 교환', defValue: '0.8' },
-      { value: 'X0303', label: '브레이크 오일 교환', defValue: '0.7' },
+      { value: 'X0301', label: '수리 전 기초정형', defValue: '0.8' },
+      { value: 'X0302', label: '양면 스폿 용접(패널당)', defValue: '0.8' },
+      { value: 'X0303', label: '수정작업(프레임 수정기 비용별도)', defValue: '0.7' },
     ],
   },
   {
-    value: 'cooling',
-    label: '냉각·에어컨',
+    value: 'm_cate5',
+    label: '시운전',
     items: [
-      { value: 'X0401', label: '부동액 교환', defValue: '0.8' },
-      { value: 'X0402', label: '에어컨 필터 교환', defValue: '0.3' },
-      { value: 'A0403', label: '에어컨 가스 점검·충전', defValue: '0.5' },
+      { value: 'X0401', label: '진단 시운전', defValue: '0.8' },
+      { value: 'X0402', label: '작업 시운전', defValue: '0.3' },
+      { value: 'A0403', label: '출고 시운전', defValue: '0.5' },
     ],
   },
   {
-    value: 'consumable',
-    label: '일반 소모품',
+    value: 'm_cate6',
+    label: '세차',
     items: [
-      { value: 'X0501', label: '와이퍼 블레이드 교환', defValue: '0.2' },
-      { value: 'X0502', label: '배터리 교환', defValue: '0.5' },
-      { value: 'A0503', label: '타이어 공기압 점검', defValue: '0.2' },
+      { value: 'X0501', label: '세차-내부', defValue: '0.2' },
+      { value: 'X0502', label: '세차-외부', defValue: '0.5' },
+      { value: 'A0503', label: '세차-전체', defValue: '0.2' },
     ],
   },
 ]
 
-function CategoryRow({ category, active, onHover }) {
+function CategoryRow({ category, active, onHover, onSelect }) {
+  const hasSubmenu = Array.isArray(category.items) && category.items.length > 0
   return (
     <button
       type="button"
-      onMouseEnter={(event) => onHover({
-        rect: event.currentTarget.getBoundingClientRect(),
-        category,
-      })}
+      onMouseEnter={(event) => {
+        if (!hasSubmenu) return
+        onHover({ rect: event.currentTarget.getBoundingClientRect(), category })
+      }}
+      onClick={() => {
+        if (hasSubmenu) return
+        onSelect?.(category)
+      }}
       className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 active:bg-gray-200 ${active ? 'bg-gray-100' : ''}`}
     >
       <span>{category.label}</span>
-      <span className="ml-3 text-xs text-gray-400">›</span>
+      {hasSubmenu && <span className="ml-3 text-xs text-gray-400">›</span>}
     </button>
   )
 }
@@ -92,11 +102,15 @@ export default function BasicMaintenanceMenu({ open, onClose, onItemClick }) {
             category={category}
             active={submenu?.category.value === category.value}
             onHover={setSubmenu}
+            onSelect={(item) => {
+              onItemClick?.(item)
+              onClose?.()
+            }}
           />
         ))}
       </div>
 
-      {submenu && (
+      {submenu?.category.items?.length > 0 && (
         <div
           className="fixed z-[1060] min-w-52 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
           style={{

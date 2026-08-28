@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowRight, ArrowUpDown, Banknote, Car, CheckCircle2, ChevronDown, ClipboardEdit, FileText, FlaskConical,
+  ArrowRight, ArrowUpDown, Banknote, Car, CheckCircle2, ChevronDown, ClipboardEdit, FileText, FlaskConical, History,
   Image as ImageIcon, Paintbrush, Plus, Printer, Radio, Save, Search, Send, Sparkles, Trash2,
   Ruler, UserRound, Wrench, X,
 } from 'lucide-react'
@@ -27,6 +27,10 @@ import PrintFormatModal from './PrintFormatModal'
 import EstimateItemsModal from './EstimateItemsModal'
 import PartsPurchaseModal from './PartsPurchaseModal'
 import InventoryPartsModal from './InventoryPartsModal'
+import VehicleSetWorkModal from './VehicleSetWorkModal'
+import MySetModal from './MySetModal'
+import ChemicalItemsModal from '../ChemicalItemsPopup'
+import RepairHistoryModal from './RepairHistoryModal'
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const COVERAGE_OPTIONS = ['자차', '대물']
@@ -65,6 +69,7 @@ const MANUAL_WORK_OPTIONS = [
   { code: 'W', label: '세차' },
 ]
 const DIRECT_LABOR_WORKS = new Set(['견인', '구난', '세차'])
+const INPUT_COLUMN_ORDER = ['manufacturerCode', 'content', 'hour', 'unitPrice', 'laborAmt', 'worker', 'prevention', 'molit', 'partType']
 const PART_TYPE_OPTIONS = [
   { value: 'A', label: '신품' },
   { value: 'B', label: '재제조' },
@@ -102,15 +107,30 @@ const LABOR_MENU_ITEMS = [
   { label: '도장항목', icon: Paintbrush },
   { label: '케미칼항목', icon: FlaskConical },
   { label: '견적항목', icon: FileText },
-  { label: '타견적 불러오기', icon: ClipboardEdit },
+  { label: '기본정비항목', icon: ClipboardEdit },
+  { label: '타견적 불러오기', icon: ClipboardEdit, subItems: [{ label: '보험견적2017', icon: FileText }, { label: 'KAIMA', icon: FileText }] },
+  { label: '작업지시서', icon: FileText },
+  { label: 'AI 견적', icon: Sparkles },
 ]
 const PART_MENU_ITEMS = [
   { label: '소요부품', icon: Search },
-  { label: '셋트작업', icon: ClipboardEdit },
+  { label: '셋트작업', icon: ClipboardEdit, subItems: [{ label: '나의셋트', icon: ClipboardEdit }, { label: '차량별 셋트', icon: Car }] },
   { label: '재고부품', icon: FileText },
   { label: '출고부품', icon: Send },
   { label: '중고부품', icon: Search },
   { label: '수입차 부품', icon: Search },
+  { label: '소요매입', icon: ClipboardEdit },
+]
+const VEHICLE_MENU_ITEMS = [
+  { label: '예방', icon: CheckCircle2 },
+  { label: '수리이력', icon: History },
+  { label: '사진', icon: ImageIcon },
+]
+const BUSINESS_MENU_ITEMS = [
+  { label: '서식인쇄', icon: Printer },
+  { label: '견적청구', icon: Send },
+  { label: '중복체크', icon: CheckCircle2 },
+  { label: '정비이력전송', icon: Radio },
 ]
 const money = (value) => (value || 0).toLocaleString('ko-KR')
 
@@ -283,22 +303,52 @@ function SegmentToggle({ value, onChange, options }) {
   )
 }
 
-function ToolbarMenu({ id, label, icon: Icon, items, openMenu, setOpenMenu, onItemClick }) {
+function ToolbarMenu({ id, label, icon: Icon, items, openMenu, setOpenMenu, onItemClick, size = 'md' }) {
   const open = openMenu === id
+  const [openSubMenu, setOpenSubMenu] = useState(null)
+
+  useEffect(() => {
+    if (!open) setOpenSubMenu(null)
+  }, [open])
+
   return (
     <div className="relative">
-      <Button size="sm" onClick={() => setOpenMenu(open ? null : id)}>
+      <Button size={size} onClick={() => setOpenMenu(open ? null : id)}>
         <Icon size={13} />{label}<ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </Button>
       {open && (
         <>
           <button type="button" aria-label={`${label} 메뉴 닫기`} onClick={() => setOpenMenu(null)} className="fixed inset-0 z-20 cursor-default" />
-          <div className="absolute left-0 top-full z-30 mt-1 min-w-48 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-            {items.map(({ label: itemLabel, icon: ItemIcon }) => (
-              <button key={itemLabel} type="button" onClick={() => { onItemClick?.(itemLabel); setOpenMenu(null) }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700">
-                <ItemIcon size={14} className="shrink-0 text-gray-400" />
-                <span>{itemLabel}</span>
-              </button>
+          <div className="absolute left-0 top-full z-30 mt-1 min-w-48 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+            {items.map(({ label: itemLabel, icon: ItemIcon, subItems }) => (
+              <div key={itemLabel} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (subItems?.length) {
+                      setOpenSubMenu((current) => current === itemLabel ? null : itemLabel)
+                      return
+                    }
+                    onItemClick?.(itemLabel)
+                    setOpenMenu(null)
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700"
+                >
+                  <ItemIcon size={14} className="shrink-0 text-gray-400" />
+                  <span className="flex-1">{itemLabel}</span>
+                  {subItems?.length ? <ChevronDown size={12} className="-rotate-90 text-gray-400" /> : null}
+                </button>
+                {openSubMenu === itemLabel && subItems?.length ? (
+                  <div className="absolute left-full top-0 z-40 ml-1 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                    {subItems.map(({ label: subLabel, icon: SubIcon }) => (
+                      <button key={subLabel} type="button" onClick={() => { onItemClick?.(subLabel); setOpenMenu(null) }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700">
+                        <SubIcon size={14} className="shrink-0 text-gray-400" />
+                        <span>{subLabel}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
         </>
@@ -307,13 +357,14 @@ function ToolbarMenu({ id, label, icon: Icon, items, openMenu, setOpenMenu, onIt
   )
 }
 
-function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carNo, carName, laborRates }) {
+function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carNo, carName, laborRates, onOpenLaborItems, onOpenPaintItems, onOpenChemicalItems, onOpenEstimateItems, onOpenPartsPurchase, onOpenInventoryParts, onOpenVehicleSetWork, onOpenMySet, onOpenPreventiveItems, onOpenRepairHistory, onOpenPhotoViewer, onOpenPrintFormat }) {
   const alert = useAlert()
   const [arrangeMode, setArrangeMode] = useState('블록')
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [selectMenuOpen, setSelectMenuOpen] = useState(false)
   const [deleteMenuOpen, setDeleteMenuOpen] = useState(false)
   const [basicMenuOpen, setBasicMenuOpen] = useState(false)
+  const [itemToolbarMenu, setItemToolbarMenu] = useState(null)
   const [workMenu, setWorkMenu] = useState(null)
   const [partTypeMenu, setPartTypeMenu] = useState(null)
   const [pendingFocus, setPendingFocus] = useState(null)
@@ -392,7 +443,24 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
     if (adjacent) setSelectedId(adjacent.id)
   }
 
+  const moveColumnFocus = (row, key, backward = false) => {
+    const cells = INPUT_COLUMN_ORDER.flatMap((columnKey) => rows
+      .filter((item) => editableKeys(item).includes(columnKey))
+      .map((item) => ({ row: item, key: columnKey })))
+    const currentIndex = cells.findIndex((cell) => cell.row.id === row.id && cell.key === key)
+    const nextCell = cells[currentIndex + (backward ? -1 : 1)]
+    if (!nextCell) return
+    focusCell(nextCell.row.id, nextCell.key)
+    setSelectedId(nextCell.row.id)
+  }
+
   const inputKeyDown = (row, key) => (event) => {
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      event.stopPropagation()
+      moveColumnFocus(row, key, event.shiftKey)
+      return
+    }
     if (event.key !== 'Enter') return
     event.preventDefault()
     event.stopPropagation()
@@ -660,28 +728,20 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
         <Button size="sm" onClick={() => addManualRow('#공임')}><Plus size={13} />공임추가</Button>
         <Button size="sm" onClick={() => addManualRow('#부품')}><Plus size={13} />부품추가</Button>
         <div className="relative">
-          <Button size="sm" onClick={() => {
-            setSelectMenuOpen(false)
-            setDeleteMenuOpen(false)
-            setBasicMenuOpen((prev) => !prev)
-          }}>
-            <ClipboardEdit size={13} />기본정비항목
-          </Button>
+          <ToolbarMenu id="item-labor" label="공임" icon={Wrench} items={LABOR_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={(itemLabel) => { if (itemLabel === '공임항목') onOpenLaborItems?.(); if (itemLabel === '도장항목') onOpenPaintItems?.(); if (itemLabel === '케미칼항목') onOpenChemicalItems?.(); if (itemLabel === '견적항목') onOpenEstimateItems?.(); if (itemLabel === '기본정비항목') setBasicMenuOpen(true); if (itemLabel === '작업지시서') setWorkOrderOpen(true); if (itemLabel === 'AI 견적') setAiEstimateOpen(true) }} />
           <BasicMaintenanceMenu
             open={basicMenuOpen}
             onClose={() => setBasicMenuOpen(false)}
             onItemClick={addBasicMaintenanceRow}
           />
         </div>
+        <ToolbarMenu id="item-parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={(itemLabel) => { if (itemLabel === '소요부품') onOpenPartsPurchase?.(); if (itemLabel === '나의셋트') onOpenMySet?.(); if (itemLabel === '차량별 셋트') onOpenVehicleSetWork?.(); if (itemLabel === '재고부품') onOpenInventoryParts?.() }} />
+        <ToolbarMenu id="item-vehicle" label="차량" icon={Car} items={VEHICLE_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={(itemLabel) => { if (itemLabel === '예방') onOpenPreventiveItems?.(); if (itemLabel === '수리이력') onOpenRepairHistory?.(); if (itemLabel === '사진') onOpenPhotoViewer?.() }} />
+        <ToolbarMenu id="item-business" label="업무" icon={FileText} items={BUSINESS_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={(itemLabel) => { if (itemLabel === '서식인쇄') onOpenPrintFormat?.() }} />
         <span className="mx-0.5 h-5 w-px bg-gray-200" />
         <span className="text-[11px] text-gray-400">자리이동</span>
         <SegmentToggle value={arrangeMode} onChange={setArrangeMode} options={['블록', '자유']} />
         <Button size="sm"><ArrowUpDown size={13} />도장 하단정렬</Button>
-        <span className="mx-0.5 h-5 w-px bg-gray-200" />
-        <Button size="sm"><ClipboardEdit size={13} />소요매입</Button>
-        <Button size="sm" onClick={() => setWorkOrderOpen(true)}><FileText size={13} />작업지시</Button>
-        <Button size="sm" variant="violet"><Radio size={13} />정비이력전송</Button>
-        <Button size="sm" className="border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100" onClick={() => setAiEstimateOpen(true)}><Sparkles size={13} />AI 견적</Button>
       </div>
       <div className="min-h-0 flex-1 bg-white">
         <FixedHeadTable
@@ -818,7 +878,7 @@ function LaborSettingsPanel({ master, setMaster, workType }) {
         <Select className="w-full" value={master.paintType} onChange={set('paintType')} options={PAINT_TYPE_OPTIONS} />
       </FormField>
       <div className="my-1 border-t border-gray-100" />
-      <FormField label="견적구분" labelWidth="w-24">
+      <FormField label="업무구분" labelWidth="w-24">
         <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">보험</span>
       </FormField>
       <FormField label="작업담당자" labelWidth="w-24"><StaffLookupField value={master.workManager} label="작업담당자" onSearch={() => setStaffTarget('workManager')} onClear={() => set('workManager')('')} /></FormField>
@@ -1287,18 +1347,20 @@ export default function SalesDetailEditPage({ row, onBack }) {
   const [estimateItemsOpen, setEstimateItemsOpen] = useState(false)
   const [partsPurchaseOpen, setPartsPurchaseOpen] = useState(false)
   const [inventoryPartsOpen, setInventoryPartsOpen] = useState(false)
-  const [toolbarMenu, setToolbarMenu] = useState(null)
+  const [vehicleSetWorkOpen, setVehicleSetWorkOpen] = useState(false)
+  const [mySetOpen, setMySetOpen] = useState(false)
+  const [chemicalItemsOpen, setChemicalItemsOpen] = useState(false)
+  const [repairHistoryOpen, setRepairHistoryOpen] = useState(false)
 
   const workType = row?.type ?? '보험'
   const photoWinRef = useRef(null)
   const laborWinRef = useRef(null)
   const paintWinRef = useRef(null)
-  const chemicalWinRef = useRef(null)
   const preventiveWinRef = useRef(null)
   const photoContext = { estSerial: row?.id ?? '신규', carNo: master.carNo || '' }
 
   useEffect(() => () => {
-    for (const popupRef of [photoWinRef, laborWinRef, paintWinRef, chemicalWinRef, preventiveWinRef]) {
+    for (const popupRef of [photoWinRef, laborWinRef, paintWinRef, preventiveWinRef]) {
       const popup = popupRef.current
       if (popup && !popup.closed) {
         try { popup.close() } catch { /* popup may already be unavailable */ }
@@ -1357,16 +1419,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
     })
   }
   const openChemicalItems = () => {
-    const payload = { est_serial: row?.id ?? '신규', carno: master.carNo || '' }
-    if (chemicalWinRef.current && !chemicalWinRef.current.closed) {
-      chemicalWinRef.current.focus()
-      chemicalWinRef.current.postMessage({ type: 'CHEM_ITEMS_SET_CTX', payload }, globalThis.location.origin)
-      return
-    }
-    chemicalWinRef.current = openCenteredWindow('/chemical-items', 'chemicalItems', 1060, 900, {
-      windowFeatures: { scrollbars: 'yes', resizable: 'yes' },
-      postMessage: { type: 'CHEM_ITEMS_SET_CTX', payload, attempts: 5, intervals: [0, 200, 600, 1200, 2000] },
-    })
+    setChemicalItemsOpen(true)
   }
   const openPreventiveItems = () => {
     const payload = { estSerial: row?.id ?? '신규', carNo: master.carNo || '' }
@@ -1432,19 +1485,6 @@ export default function SalesDetailEditPage({ row, onBack }) {
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
-        <ToolbarMenu id="labor" label="공임" icon={Wrench} items={LABOR_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} onItemClick={(itemLabel) => { if (itemLabel === '공임항목') openLaborItems(); if (itemLabel === '도장항목') openPaintItems(); if (itemLabel === '케미칼항목') openChemicalItems(); if (itemLabel === '견적항목') setEstimateItemsOpen(true) }} />
-        <ToolbarMenu id="parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={toolbarMenu} setOpenMenu={setToolbarMenu} onItemClick={(itemLabel) => { if (itemLabel === '소요부품') setPartsPurchaseOpen(true); if (itemLabel === '재고부품') setInventoryPartsOpen(true) }} />
-        <Button size="sm" onClick={openPreventiveItems}><CheckCircle2 size={13} />예방</Button>
-        <span className="h-5 w-px bg-gray-200" />
-        <Button size="sm"><CheckCircle2 size={13} />중복체크</Button>
-        <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" onClick={openPhotoViewer}><ImageIcon size={13} />사진</Button>
-          <Button size="sm" onClick={() => setPrintFormatOpen(true)}><Printer size={13} />서식인쇄</Button>
-          <Button size="sm"><Send size={13} />견적청구</Button>
-        </div>
-      </div>
-
       <div className="flex min-h-0 flex-1 overflow-x-auto">
         <div className="flex min-w-[720px] flex-1 flex-col">
           <ReceptionSection master={master} setMaster={setMaster} onOpenVehicleName={() => setVehicleNameOpen(true)} onOpenCompany={() => setCompanyOpen(true)} onOpenCustomer={() => setCustomerOpen(true)} onOpenVehicleRegistry={openVehicleRegistry} onOpenSpecification={openVehicleSpecification} />
@@ -1457,6 +1497,18 @@ export default function SalesDetailEditPage({ row, onBack }) {
             carNo={master.carNo}
             carName={master.carName}
             laborRates={{ detach: master.detachRate, sheet: master.sheetRate, paint: master.paintRate }}
+            onOpenLaborItems={openLaborItems}
+            onOpenPaintItems={openPaintItems}
+            onOpenChemicalItems={openChemicalItems}
+            onOpenEstimateItems={() => setEstimateItemsOpen(true)}
+            onOpenPartsPurchase={() => setPartsPurchaseOpen(true)}
+            onOpenInventoryParts={() => setInventoryPartsOpen(true)}
+            onOpenVehicleSetWork={() => setVehicleSetWorkOpen(true)}
+            onOpenMySet={() => setMySetOpen(true)}
+            onOpenPreventiveItems={openPreventiveItems}
+            onOpenRepairHistory={() => setRepairHistoryOpen(true)}
+            onOpenPhotoViewer={openPhotoViewer}
+            onOpenPrintFormat={() => setPrintFormatOpen(true)}
           />
         </div>
 
@@ -1501,6 +1553,10 @@ export default function SalesDetailEditPage({ row, onBack }) {
       {estimateItemsOpen && <EstimateItemsModal vehicle={{ carNo: master.carNo, carName: master.carName }} onClose={() => setEstimateItemsOpen(false)} onApply={(estimateRows) => appendSuggestedRows(estimateRows, 'estimate')} />}
       {partsPurchaseOpen && <PartsPurchaseModal onClose={() => setPartsPurchaseOpen(false)} onApply={(partRow) => appendSuggestedRows([partRow], 'purchase')} />}
       {inventoryPartsOpen && <InventoryPartsModal vehicleName={master.carName} onClose={() => setInventoryPartsOpen(false)} onApply={(partRow) => appendSuggestedRows([partRow], 'inventory')} />}
+      {vehicleSetWorkOpen && <VehicleSetWorkModal vehicle={{ vin: master.vin, carName: master.carName }} onClose={() => setVehicleSetWorkOpen(false)} onApply={(setWorkRows) => appendSuggestedRows(setWorkRows, 'vehicle-set-work')} />}
+      {mySetOpen && <MySetModal vehicle={{ carName: master.carName, codecar: master.carCode }} onClose={() => setMySetOpen(false)} onApply={(setWorkRows) => appendSuggestedRows(setWorkRows, 'my-set')} />}
+      {chemicalItemsOpen && <ChemicalItemsModal vehicle={{ carNo: master.carNo }} onClose={() => setChemicalItemsOpen(false)} onApply={(chemicalRow) => appendSuggestedRows([chemicalRow], 'chemical')} />}
+      {repairHistoryOpen && <RepairHistoryModal vehicle={{ carNo: master.carNo }} onClose={() => setRepairHistoryOpen(false)} onApply={(repairRow) => appendSuggestedRows([repairRow], 'repair-history')} />}
     </div>
   )
 }

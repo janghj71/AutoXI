@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Check, FlaskConical, Search } from 'lucide-react'
 import Button from '../components/Button'
 import FixedHeadTable from '../components/FixedHeadTable'
-import PopupPageShell from '../components/PopupPageShell'
+import Modal from '../components/Modal'
 
 const MATERIALS = [
   { id: 'c1', code: 'M-001', name: '퍼티(일반)', unit: 'EA', price: '18,000', hour: '0.20', remark: '판금 보수용' },
@@ -23,34 +23,25 @@ const columns = [
   { key: 'remark', title: '비고', width: '16%' },
 ]
 
-export default function ChemicalItemsPopup() {
-  const [context, setContext] = useState({ carNo: '11가1234' })
+export default function ChemicalItemsModal({ vehicle, onClose, onApply }) {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(MATERIALS[0].id)
   const rows = useMemo(() => MATERIALS.filter((row) => !query.trim() || `${row.code} ${row.name} ${row.remark}`.toLowerCase().includes(query.trim().toLowerCase())), [query])
   const selected = rows.find((row) => row.id === selectedId) || rows[0]
 
-  useEffect(() => {
-    const onMessage = (event) => {
-      if (event.origin !== globalThis.location.origin || event.data?.type !== 'CHEM_ITEMS_SET_CTX') return
-      setContext((prev) => ({ ...prev, ...(event.data.payload || {}) }))
-    }
-    globalThis.addEventListener('message', onMessage)
-    return () => globalThis.removeEventListener('message', onMessage)
-  }, [])
-
   const pick = () => {
     if (!selected) return
-    try { globalThis.opener?.postMessage({ type: 'CHEM_ITEMS_PICK', payload: { item: selected, carNo: context.carNo } }, globalThis.location.origin) } catch { /* opener unavailable */ }
+    const price = Number(String(selected.price).replace(/,/g, '')) || 0
+    onApply?.({ kind: '부품', partCode: selected.code, content: selected.name, work: '케미칼', hour: selected.hour, unitPrice: price, partAmt: price, laborAmt: 0 })
+    onClose?.()
   }
 
   return (
-    <PopupPageShell title="케미칼항목" description={`차량번호: ${context.carNo}`} onClose={() => globalThis.close?.()} closeWhenOpenerClosed>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 bg-gray-50 p-4">
+    <Modal title={<span className="inline-flex items-center gap-1.5"><FlaskConical size={16} className="text-green-600" />케미칼항목</span>} description={`차량번호: ${vehicle?.carNo || '-'}`} onClose={onClose} width="max-w-4xl" footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" size="md" onClick={pick} disabled={!selected}><Check size={14} />선택</Button></>}>
+      <div className="flex h-[520px] min-h-0 flex-col gap-3">
         <div className="flex h-10 shrink-0 items-center gap-2 rounded-md border border-gray-300 bg-white px-3"><Search size={15} className="text-gray-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="부품코드 / 항목 / 비고 검색" className="min-w-0 flex-1 text-sm outline-none" /></div>
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-gray-200 bg-white"><FixedHeadTable columns={columns} rows={rows} rowSize="sm" rowKey={(row) => row.id} selectedKey={selected?.id} onRowClick={(row) => setSelectedId(row.id)} onRowDoubleClick={pick} emptyText="케미칼항목이 없습니다." /></div>
-        <div className="flex shrink-0 justify-end"><Button variant="primary" onClick={pick} disabled={!selected}>선택</Button></div>
       </div>
-    </PopupPageShell>
+    </Modal>
   )
 }

@@ -18,8 +18,8 @@ import { menuData } from './data/menuData'
 import PhotoViewer from './pages/PhotoViewer'
 import LaborItemsPopup from './pages/LaborItemsPopup'
 import PaintItemsPopup from './pages/PaintItemsPopup'
-import ChemicalItemsPopup from './pages/ChemicalItemsPopup'
 import PreventiveItemsPopup from './pages/PreventiveItemsPopup'
+import 나의셋트 from './pages/02_작업일지/나의셋트'
 
 const PAGE_COMPONENTS = {
   '0101': 매출처등록,
@@ -32,6 +32,7 @@ const PAGE_COMPONENTS = {
   '0113': 보험사조회,
   '0111': 업체정보,
   '0201': 매출일지,
+  '0604': 나의셋트,
 }
 
 const MAX_TABS = 10
@@ -43,7 +44,6 @@ export default function App() {
   if (globalThis.location?.pathname === '/photo-viewer') return <PhotoViewer />
   if (globalThis.location?.pathname === '/labor-items') return <LaborItemsPopup />
   if (globalThis.location?.pathname === '/paint-items') return <PaintItemsPopup />
-  if (globalThis.location?.pathname === '/chemical-items') return <ChemicalItemsPopup />
   if (globalThis.location?.pathname === '/preventive-items') return <PreventiveItemsPopup />
 
   const handleMenuClick = (item) => {

@@ -80,7 +80,7 @@ export default function PartsPurchaseModal({ onClose, onApply }) {
       description="매입목록에서 부품을 선택해 매출내역에 추가합니다."
       onClose={onClose}
       width="max-w-5xl"
-      footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" disabled={!selectedRow} onClick={() => applyRow(selectedRow)}><Check size={14} />선택</Button></>}
+      footer={<><Button onClick={onClose}>닫기</Button><Button variant="primary" size="md" disabled={!selectedRow} onClick={() => applyRow(selectedRow)}><Check size={14} />선택</Button></>}
     >
       <div className="flex h-[620px] min-h-0 flex-col gap-3">
         <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto pb-1">
