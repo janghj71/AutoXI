@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight, ArrowUpDown, Banknote, Car, CheckCircle2, ChevronDown, ClipboardEdit, FileText, FlaskConical, History,
   Image as ImageIcon, Paintbrush, Plus, Printer, Radio, Save, Search, Send, Sparkles, Trash2,
-  Ruler, UserRound, Wrench, X,
+  Minus, Ruler, Settings2, UserRound, Wrench, X,
 } from 'lucide-react'
 import { useAlert } from '../../alerts'
 import Button from '../../components/Button'
@@ -69,7 +69,6 @@ const MANUAL_WORK_OPTIONS = [
   { code: 'W', label: '세차' },
 ]
 const DIRECT_LABOR_WORKS = new Set(['견인', '구난', '세차'])
-const INPUT_COLUMN_ORDER = ['manufacturerCode', 'content', 'hour', 'unitPrice', 'laborAmt', 'worker', 'prevention', 'molit', 'partType']
 const PART_TYPE_OPTIONS = [
   { value: 'A', label: '신품' },
   { value: 'B', label: '재제조' },
@@ -132,6 +131,28 @@ const BUSINESS_MENU_ITEMS = [
   { label: '중복체크', icon: CheckCircle2 },
   { label: '정비이력전송', icon: Radio },
 ]
+const ITEM_COLUMN_STORAGE_KEY = 'autoxi.sales-detail.item-columns'
+const ITEM_COLUMN_DEFAULTS = [
+  ['kind', '구분', '58px'], ['manufacturerCode', '제작사품번', '135px'], ['content', '작업내용', '280px'], ['work', '작업', '70px'],
+  ['hour', '시간', '52px'], ['unitPrice', '단가', '90px'], ['partAmt', '부품액', '100px'], ['laborAmt', '공임액', '100px'],
+  ['worker', '작업자', '80px'], ['prevention', '예방', '52px'], ['workStatus', '작업상태', '90px'], ['molit', '국토부', '52px'],
+  ['partType', '부품', '58px'], ['releaseDate', '출고일자', '100px'], ['pointPolicy', '적립', '64px'], ['supplier', '매입처', '120px'],
+].map(([key, label, width]) => ({ key, label, width, visible: true }))
+const cloneItemColumnDefaults = () => ITEM_COLUMN_DEFAULTS.map((column) => ({ ...column }))
+const loadItemColumnConfig = () => {
+  try {
+    const saved = globalThis.localStorage?.getItem(ITEM_COLUMN_STORAGE_KEY)
+    const parsed = saved ? JSON.parse(saved) : null
+    if (!Array.isArray(parsed)) return cloneItemColumnDefaults()
+    const savedByKey = new Map(parsed.filter((column) => ITEM_COLUMN_DEFAULTS.some((item) => item.key === column?.key)).map((column) => [column.key, column]))
+    return ITEM_COLUMN_DEFAULTS.map((column) => {
+      const savedColumn = savedByKey.get(column.key)
+      return { ...column, visible: savedColumn ? savedColumn.visible !== false : false, width: savedColumn && /^\d+px$/.test(savedColumn.width) ? savedColumn.width : column.width }
+    })
+  } catch {
+    return cloneItemColumnDefaults()
+  }
+}
 const money = (value) => (value || 0).toLocaleString('ko-KR')
 
 const initialMaster = (row) => ({
@@ -208,12 +229,27 @@ function ReceptionSection({ master, setMaster, onOpenVehicleName, onOpenCompany,
   const setInput = (key) => (event) => set(key)(event.target.value)
   const inputClass = 'w-full min-w-0 rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-600/15'
   const searchButtonClass = 'inline-flex size-[30px] shrink-0 items-center justify-center rounded-sm border border-gray-300 text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+  const moveReceptionFocus = (event) => {
+    if (!['Enter', 'Tab'].includes(event.key)) return
+    const current = event.target instanceof Element ? event.target.closest('[data-reception-order]') : null
+    if (!(current instanceof HTMLInputElement)) return
+    const fields = Array.from(event.currentTarget.querySelectorAll('[data-reception-order]'))
+      .filter((field) => field instanceof HTMLInputElement && !field.disabled)
+      .sort((first, second) => Number(first.dataset.receptionOrder) - Number(second.dataset.receptionOrder))
+    const currentIndex = fields.indexOf(current)
+    const next = fields[currentIndex + (event.shiftKey ? -1 : 1)]
+    if (!next) return
+    event.preventDefault()
+    event.stopPropagation()
+    next.focus()
+    next.select?.()
+  }
 
   return (
-    <div className="grid shrink-0 grid-cols-3 gap-x-6 gap-y-2 border-b border-gray-200 px-4 py-3">
+    <div className="grid shrink-0 grid-cols-3 gap-x-6 gap-y-2 border-b border-gray-200 px-4 py-3" onKeyDown={moveReceptionFocus}>
       <FormField label="차량번호" labelWidth="w-20" required>
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <input value={master.carNo} onChange={setInput('carNo')} className={inputClass} />
+          <input data-reception-order="1" value={master.carNo} onChange={setInput('carNo')} className={inputClass} />
           <button type="button" onClick={onOpenCustomer} className="inline-flex h-[30px] shrink-0 items-center justify-center gap-1 rounded-sm border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
             <UserRound size={13} />고객
           </button>
@@ -222,7 +258,7 @@ function ReceptionSection({ master, setMaster, onOpenVehicleName, onOpenCompany,
       <FormField label="고객명" labelWidth="w-20">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <div className="relative min-w-0 flex-1">
-            <input value={master.customer} onChange={setInput('customer')} placeholder="고객명" className={`${inputClass} pr-8`} />
+            <input data-reception-order="8" value={master.customer} onChange={setInput('customer')} placeholder="고객명" className={`${inputClass} pr-8`} />
             {master.customer && <button type="button" aria-label="고객명 삭제" onClick={() => setMaster((prev) => ({ ...prev, customer: '' }))} className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X size={13} /></button>}
           </div>
           <button type="button" onClick={onOpenVehicleRegistry} className="inline-flex h-[30px] shrink-0 items-center justify-center gap-1 rounded-sm border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
@@ -235,70 +271,57 @@ function ReceptionSection({ master, setMaster, onOpenVehicleName, onOpenCompany,
       </FormField>
       <FormField label="입고일자" labelWidth="w-20">
         <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_72px] gap-1.5">
-          <input type="date" value={master.inDate} onChange={setInput('inDate')} className={inputClass} />
+          <input data-reception-order="14" type="date" value={master.inDate} onChange={setInput('inDate')} className={inputClass} />
           <Select className="w-full" value={master.inHour} onChange={set('inHour')} options={HOUR_OPTIONS} />
         </div>
       </FormField>
 
       <FormField label="차량명" labelWidth="w-20" required>
         <div className="grid min-w-0 flex-1 grid-cols-[4.5rem_30px_minmax(0,1fr)] items-center gap-1.5">
-          <input value={master.carCode} onChange={setInput('carCode')} placeholder="코드" className={`${inputClass} px-2`} />
+          <input data-reception-order="2" value={master.carCode} onChange={setInput('carCode')} placeholder="코드" className={`${inputClass} px-2`} />
           <button type="button" aria-label="차량명 검색" onClick={onOpenVehicleName} className={searchButtonClass}><Search size={13} /></button>
-          <input value={master.carName} readOnly placeholder="차량명" className={`${inputClass} bg-gray-50`} />
+          <input data-reception-order="3" value={master.carName} readOnly placeholder="차량명" className={`${inputClass} bg-gray-50`} />
         </div>
       </FormField>
-      <FormField label="연락처" labelWidth="w-20"><TelField value={master.phone} onChange={set('phone')} /></FormField>
+      <FormField label="연락처" labelWidth="w-20"><TelField value={master.phone} onChange={set('phone')} inputProps={[{ 'data-reception-order': '9' }, { 'data-reception-order': '10' }, { 'data-reception-order': '11' }]} /></FormField>
       <FormField label="출고예정" labelWidth="w-20">
         <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_72px] gap-1.5">
-          <input type="date" value={master.outDueDate} onChange={setInput('outDueDate')} className={inputClass} />
+          <input data-reception-order="15" type="date" value={master.outDueDate} onChange={setInput('outDueDate')} className={inputClass} />
           <Select className="w-full" value={master.outDueHour} onChange={set('outDueHour')} options={HOUR_OPTIONS} />
         </div>
       </FormField>
 
-      <FormField label="모델명" labelWidth="w-20" value={master.modelName} onChange={setInput('modelName')} />
+      <FormField label="모델명" labelWidth="w-20" value={master.modelName} onChange={setInput('modelName')} inputProps={{ 'data-reception-order': '4' }} />
       <FormField label="소속회사" labelWidth="w-20">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <div className="relative min-w-0 flex-1">
-            <input value={master.companyName} readOnly placeholder="소속회사 선택" className={`${inputClass} bg-gray-50 pr-8`} />
+            <input data-reception-order="12" value={master.companyName} readOnly placeholder="소속회사 선택" className={`${inputClass} bg-gray-50 pr-8`} />
             {master.companyName && <button type="button" aria-label="소속회사 삭제" onClick={() => setMaster((prev) => ({ ...prev, companyCode: '', companyName: '' }))} className="absolute right-1.5 top-1/2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X size={13} /></button>}
           </div>
           <button type="button" aria-label="소속회사 검색" onClick={onOpenCompany} className={searchButtonClass}><Search size={13} /></button>
         </div>
       </FormField>
-      <FormField label="출고일자" labelWidth="w-20" type="date" value={master.outDate} onChange={setInput('outDate')} />
+      <FormField label="출고일자" labelWidth="w-20" type="date" value={master.outDate} onChange={setInput('outDate')} inputProps={{ 'data-reception-order': '16' }} />
 
       <FormField label="주행거리" labelWidth="w-20" required>
         <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1.5">
-          <input value={master.mileage} onChange={setInput('mileage')} placeholder="주행거리" className={inputClass} />
-          <input value={master.averageMileage} onChange={setInput('averageMileage')} className={inputClass} />
+          <input data-reception-order="5" value={master.mileage} onChange={setInput('mileage')} placeholder="주행거리" className={inputClass} />
+          <input data-reception-order="6" value={master.averageMileage} onChange={setInput('averageMileage')} className={inputClass} />
           <span className="shrink-0 text-xs text-gray-400">평균KM</span>
         </div>
       </FormField>
       <FormField label="부가세" labelWidth="w-20"><Select className="w-full" value={master.vatType} onChange={set('vatType')} options={SALES_VAT_OPTIONS} /></FormField>
-      <FormField label="청구일자" labelWidth="w-20" type="date" value={master.claimDate} onChange={setInput('claimDate')} />
+      <FormField label="청구일자" labelWidth="w-20" type="date" value={master.claimDate} onChange={setInput('claimDate')} inputProps={{ 'data-reception-order': '17' }} />
 
       <FormField label="차대번호" labelWidth="w-20">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <input value={master.vin} onChange={setInput('vin')} className={inputClass} />
+          <input data-reception-order="7" value={master.vin} onChange={setInput('vin')} className={inputClass} />
           <button type="button" onClick={onOpenSpecification} className="inline-flex h-[30px] shrink-0 items-center justify-center gap-1 rounded-sm border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
             <Ruler size={13} />규격
           </button>
         </div>
       </FormField>
-      <FormField label="고객의 소리" labelWidth="w-20" className="col-span-2" value={master.customerVoice} onChange={setInput('customerVoice')} />
-    </div>
-  )
-}
-
-function SegmentToggle({ value, onChange, options }) {
-  return (
-    <div className="flex h-7 items-center overflow-hidden rounded-md border border-gray-300 bg-white text-xs">
-      {options.map((opt, idx) => (
-        <button key={opt} type="button" onClick={() => onChange(opt)}
-          className={`px-2.5 py-1 font-medium transition-colors ${value === opt ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-50'} ${idx > 0 ? 'border-l border-gray-300' : ''}`}>
-          {opt}
-        </button>
-      ))}
+      <FormField label="고객의 소리" labelWidth="w-20" className="col-span-2" value={master.customerVoice} onChange={setInput('customerVoice')} inputProps={{ 'data-reception-order': '13' }} />
     </div>
   )
 }
@@ -332,7 +355,7 @@ function ToolbarMenu({ id, label, icon: Icon, items, openMenu, setOpenMenu, onIt
                     onItemClick?.(itemLabel)
                     setOpenMenu(null)
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700"
                 >
                   <ItemIcon size={14} className="shrink-0 text-gray-400" />
                   <span className="flex-1">{itemLabel}</span>
@@ -341,7 +364,7 @@ function ToolbarMenu({ id, label, icon: Icon, items, openMenu, setOpenMenu, onIt
                 {openSubMenu === itemLabel && subItems?.length ? (
                   <div className="absolute left-full top-0 z-40 ml-1 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
                     {subItems.map(({ label: subLabel, icon: SubIcon }) => (
-                      <button key={subLabel} type="button" onClick={() => { onItemClick?.(subLabel); setOpenMenu(null) }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700">
+                      <button key={subLabel} type="button" onClick={() => { onItemClick?.(subLabel); setOpenMenu(null) }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700">
                         <SubIcon size={14} className="shrink-0 text-gray-400" />
                         <span>{subLabel}</span>
                       </button>
@@ -354,6 +377,114 @@ function ToolbarMenu({ id, label, icon: Icon, items, openMenu, setOpenMenu, onIt
         </>
       )}
     </div>
+  )
+}
+
+function SegmentToggle({ value, onChange, options }) {
+  return (
+    <div className="flex h-7 items-center overflow-hidden rounded-md border border-gray-300 bg-white text-xs">
+      {options.map((option, index) => <button key={option} type="button" onClick={() => onChange(option)} className={`px-2.5 py-1 font-medium transition-colors ${value === option ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-50'} ${index > 0 ? 'border-l border-gray-300' : ''}`}>{option}</button>)}
+    </div>
+  )
+}
+
+function SalesItemContextMenu({ position, onClose, onDelete, onAddLabor, onAddPart, onItemClick, onOpenColumnSettings }) {
+  const [openMenu, setOpenMenu] = useState(null)
+  const [openSubMenu, setOpenSubMenu] = useState(null)
+  const menuGroups = [
+    { label: '공임', icon: Wrench, items: LABOR_MENU_ITEMS },
+    { label: '부품', icon: Search, items: PART_MENU_ITEMS },
+    { label: '차량', icon: Car, items: VEHICLE_MENU_ITEMS },
+    { label: '업무', icon: FileText, items: BUSINESS_MENU_ITEMS },
+  ]
+  const close = () => {
+    setOpenMenu(null)
+    setOpenSubMenu(null)
+    onClose()
+  }
+  const run = (label) => {
+    onItemClick(label)
+    close()
+  }
+
+  return (
+    <>
+      <button type="button" aria-label="매출내역 빠른 메뉴 닫기" className="fixed inset-0 z-[1050] cursor-default" onClick={close} />
+      <div className="fixed z-[1060] min-w-40 overflow-visible rounded-md border border-gray-200 bg-white py-1 text-xs shadow-xl" style={position}>
+        <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onDelete(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-red-50 hover:text-red-700">
+          <Trash2 size={14} className="text-gray-400" />삭제
+        </button>
+        <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onAddLabor(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
+          <Plus size={14} className="text-gray-400" />공임추가
+        </button>
+        <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onAddPart(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
+          <Plus size={14} className="text-gray-400" />부품추가
+        </button>
+        <div className="my-1 border-t border-gray-100" />
+        {menuGroups.map(({ label, icon: Icon, items }) => (
+          <div key={label} className="relative">
+            <button
+              type="button"
+              onMouseEnter={() => { setOpenMenu(label); setOpenSubMenu(null) }}
+              onClick={() => { setOpenMenu((current) => current === label ? null : label); setOpenSubMenu(null) }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700"
+            >
+              <Icon size={14} className="text-gray-400" />
+              <span className="flex-1">{label}</span>
+              <ChevronDown size={12} className="-rotate-90 text-gray-400" />
+            </button>
+            {openMenu === label && (
+              <div className="absolute left-full top-0 ml-1 min-w-48 rounded-md border border-gray-200 bg-white py-1 shadow-xl">
+                {items.map(({ label: itemLabel, icon: ItemIcon, subItems }) => (
+                  <div key={itemLabel} className="relative">
+                    <button
+                      type="button"
+                      onMouseEnter={() => setOpenSubMenu(subItems?.length ? itemLabel : null)}
+                      onClick={() => subItems?.length ? setOpenSubMenu((current) => current === itemLabel ? null : itemLabel) : run(itemLabel)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700"
+                    >
+                      <ItemIcon size={14} className="text-gray-400" />
+                      <span className="flex-1">{itemLabel}</span>
+                      {subItems?.length ? <ChevronDown size={12} className="-rotate-90 text-gray-400" /> : null}
+                    </button>
+                    {openSubMenu === itemLabel && subItems?.length && (
+                      <div className="absolute left-full top-0 ml-1 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-xl">
+                        {subItems.map(({ label: subLabel, icon: SubIcon }) => (
+                          <button key={subLabel} type="button" onClick={() => run(subLabel)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
+                            <SubIcon size={14} className="text-gray-400" />{subLabel}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        <div className="my-1 border-t border-gray-100" />
+        <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onOpenColumnSettings(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
+          <Settings2 size={14} className="text-gray-400" />컬럼설정
+        </button>
+      </div>
+    </>
+  )
+}
+
+function ItemColumnSettingsModal({ columns, onToggle, onWidth, onReset, onClose }) {
+  return (
+    <Modal title="컬럼설정" description="표시할 항목, 목록 순서와 컬럼 폭을 조절할 수 있습니다." size="lg" onClose={onClose} footer={<><Button onClick={onReset}>초기화</Button><Button variant="primary" onClick={onClose}>완료</Button></>}>
+      <div className="overflow-hidden rounded-md border border-gray-200">
+        {columns.map((column, index) => (
+          <div key={column.key} className="grid grid-cols-[28px_minmax(0,1fr)_82px_52px] items-center gap-2 border-b border-gray-100 px-3 py-2 last:border-b-0">
+            <span className="text-center text-xs text-gray-400">{index + 1}</span>
+            <span className={`text-sm ${column.visible ? 'text-gray-700' : 'text-gray-400'}`}>{column.label}</span>
+            <div className="flex h-8 items-center overflow-hidden rounded-sm border border-gray-300 bg-white"><button type="button" aria-label="컬럼 폭 감소" disabled={Number.parseInt(column.width, 10) <= 52} onClick={() => onWidth(column.key, -10)} className="inline-flex h-full w-6 items-center justify-center border-r border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-30"><Minus size={13} /></button><span className="min-w-0 flex-1 text-center text-xs tabular-nums text-gray-700">{Number.parseInt(column.width, 10)}</span><button type="button" aria-label="컬럼 폭 증가" disabled={Number.parseInt(column.width, 10) >= 360} onClick={() => onWidth(column.key, 10)} className="inline-flex h-full w-6 items-center justify-center border-l border-gray-200 text-gray-400 hover:bg-gray-50 disabled:opacity-30"><Plus size={13} /></button></div>
+            <Toggle checked={column.visible} onChange={() => onToggle(column.key)} />
+          </div>
+        ))}
+      </div>
+    </Modal>
   )
 }
 
@@ -370,6 +501,10 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
   const [pendingFocus, setPendingFocus] = useState(null)
   const [workOrderOpen, setWorkOrderOpen] = useState(false)
   const [aiEstimateOpen, setAiEstimateOpen] = useState(false)
+  const [contextMenu, setContextMenu] = useState(null)
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
+  const [itemColumnConfig, setItemColumnConfig] = useState(loadItemColumnConfig)
+  const itemTableScrollRef = useRef(null)
   const totals = useMemo(() => rows.reduce((acc, row) => ({
     part: acc.part + Number(row.partAmt || 0),
     labor: acc.labor + Number(row.laborAmt || 0),
@@ -384,6 +519,21 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
     })
     return () => globalThis.cancelAnimationFrame(frame)
   }, [pendingFocus, rows])
+
+  useEffect(() => {
+    globalThis.localStorage?.setItem(ITEM_COLUMN_STORAGE_KEY, JSON.stringify(itemColumnConfig))
+  }, [itemColumnConfig])
+
+  const updateItemColumns = (updater) => {
+    const scrollLeft = itemTableScrollRef.current?.scrollLeft ?? 0
+    setItemColumnConfig(updater)
+    globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(() => {
+      if (itemTableScrollRef.current) itemTableScrollRef.current.scrollLeft = scrollLeft
+    }))
+  }
+  const toggleItemColumn = (key) => updateItemColumns((prev) => prev.map((column) => column.key === key ? { ...column, visible: !column.visible } : column))
+  const resizeItemColumn = (key, amount) => updateItemColumns((prev) => prev.map((column) => column.key === key ? { ...column, width: `${Math.max(52, Math.min(360, Number.parseInt(column.width, 10) + amount))}px` } : column))
+  const resetItemColumns = () => updateItemColumns(cloneItemColumnDefaults())
 
   const parseMoney = (value) => Number(String(value ?? '').replace(/[^0-9-]/g, '')) || 0
   const rateForWork = (work) => {
@@ -443,24 +593,7 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
     if (adjacent) setSelectedId(adjacent.id)
   }
 
-  const moveColumnFocus = (row, key, backward = false) => {
-    const cells = INPUT_COLUMN_ORDER.flatMap((columnKey) => rows
-      .filter((item) => editableKeys(item).includes(columnKey))
-      .map((item) => ({ row: item, key: columnKey })))
-    const currentIndex = cells.findIndex((cell) => cell.row.id === row.id && cell.key === key)
-    const nextCell = cells[currentIndex + (backward ? -1 : 1)]
-    if (!nextCell) return
-    focusCell(nextCell.row.id, nextCell.key)
-    setSelectedId(nextCell.row.id)
-  }
-
   const inputKeyDown = (row, key) => (event) => {
-    if (event.key === 'Tab') {
-      event.preventDefault()
-      event.stopPropagation()
-      moveColumnFocus(row, key, event.shiftKey)
-      return
-    }
     if (event.key !== 'Enter') return
     event.preventDefault()
     event.stopPropagation()
@@ -607,6 +740,24 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
     setSelectedId(nextRows.at(-1)?.id ?? null)
   }
 
+  const handleMenuItem = (itemLabel) => {
+    if (itemLabel === '공임항목') onOpenLaborItems?.()
+    if (itemLabel === '도장항목') onOpenPaintItems?.()
+    if (itemLabel === '케미칼항목') onOpenChemicalItems?.()
+    if (itemLabel === '견적항목') onOpenEstimateItems?.()
+    if (itemLabel === '기본정비항목') setBasicMenuOpen(true)
+    if (itemLabel === '작업지시서') setWorkOrderOpen(true)
+    if (itemLabel === 'AI 견적') setAiEstimateOpen(true)
+    if (itemLabel === '소요부품') onOpenPartsPurchase?.()
+    if (itemLabel === '나의셋트') onOpenMySet?.()
+    if (itemLabel === '차량별 셋트') onOpenVehicleSetWork?.()
+    if (itemLabel === '재고부품') onOpenInventoryParts?.()
+    if (itemLabel === '예방') onOpenPreventiveItems?.()
+    if (itemLabel === '수리이력') onOpenRepairHistory?.()
+    if (itemLabel === '사진') onOpenPhotoViewer?.()
+    if (itemLabel === '서식인쇄') onOpenPrintFormat?.()
+  }
+
   const cellInputClass = 'h-8 w-full min-w-0 rounded-sm border border-transparent bg-transparent px-1 text-sm text-gray-800 outline-none focus:border-gray-300 focus:bg-white focus:ring-1 focus:ring-green-600/20'
   const renderCellInput = (row, key, { align = 'left', numeric = false, decimal = false, moneyValue = false, maxLength, expandHorizontal = false } = {}) => (
     <input
@@ -680,6 +831,10 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
     { key: 'pointPolicy', title: '적립', width: '64px', align: 'center', className: '!px-1', headerClassName: '!px-1', render: (value) => <span title={value || ''}>{String(value || '-').startsWith('미적용') ? '미적용' : value || '-'}</span> },
     { key: 'supplier', title: '매입처', width: '120px', render: (value) => ['일반', '경정비'].includes(workType) ? value || '-' : '-' },
   ]
+  const configuredColumns = itemColumnConfig.map((config) => {
+    const column = columns.find((item) => item.key === config.key)
+    return column && config.visible ? { ...column, width: config.width } : null
+  }).filter(Boolean)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -728,16 +883,16 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
         <Button size="sm" onClick={() => addManualRow('#공임')}><Plus size={13} />공임추가</Button>
         <Button size="sm" onClick={() => addManualRow('#부품')}><Plus size={13} />부품추가</Button>
         <div className="relative">
-          <ToolbarMenu id="item-labor" label="공임" icon={Wrench} items={LABOR_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={(itemLabel) => { if (itemLabel === '공임항목') onOpenLaborItems?.(); if (itemLabel === '도장항목') onOpenPaintItems?.(); if (itemLabel === '케미칼항목') onOpenChemicalItems?.(); if (itemLabel === '견적항목') onOpenEstimateItems?.(); if (itemLabel === '기본정비항목') setBasicMenuOpen(true); if (itemLabel === '작업지시서') setWorkOrderOpen(true); if (itemLabel === 'AI 견적') setAiEstimateOpen(true) }} />
+          <ToolbarMenu id="item-labor" label="공임" icon={Wrench} items={LABOR_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
           <BasicMaintenanceMenu
             open={basicMenuOpen}
             onClose={() => setBasicMenuOpen(false)}
             onItemClick={addBasicMaintenanceRow}
           />
         </div>
-        <ToolbarMenu id="item-parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={(itemLabel) => { if (itemLabel === '소요부품') onOpenPartsPurchase?.(); if (itemLabel === '나의셋트') onOpenMySet?.(); if (itemLabel === '차량별 셋트') onOpenVehicleSetWork?.(); if (itemLabel === '재고부품') onOpenInventoryParts?.() }} />
-        <ToolbarMenu id="item-vehicle" label="차량" icon={Car} items={VEHICLE_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={(itemLabel) => { if (itemLabel === '예방') onOpenPreventiveItems?.(); if (itemLabel === '수리이력') onOpenRepairHistory?.(); if (itemLabel === '사진') onOpenPhotoViewer?.() }} />
-        <ToolbarMenu id="item-business" label="업무" icon={FileText} items={BUSINESS_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={(itemLabel) => { if (itemLabel === '서식인쇄') onOpenPrintFormat?.() }} />
+        <ToolbarMenu id="item-parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
+        <ToolbarMenu id="item-vehicle" label="차량" icon={Car} items={VEHICLE_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
+        <ToolbarMenu id="item-business" label="업무" icon={FileText} items={BUSINESS_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
         <span className="mx-0.5 h-5 w-px bg-gray-200" />
         <span className="text-[11px] text-gray-400">자리이동</span>
         <SegmentToggle value={arrangeMode} onChange={setArrangeMode} options={['블록', '자유']} />
@@ -745,7 +900,7 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
       </div>
       <div className="min-h-0 flex-1 bg-white">
         <FixedHeadTable
-          columns={columns}
+          columns={configuredColumns}
           rows={rows}
           rowKey={(row) => row.id}
           rowSize="sm"
@@ -757,6 +912,17 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
             if (event?.ctrlKey || event?.metaKey) toggleMultiSelection(row.id)
           }}
           onRowDoubleClick={(row) => toggleMultiSelection(row.id)}
+          onRowContextMenu={(row, _index, event) => {
+            setSelectedId(row.id)
+            setSelectedIds(new Set())
+            setSelectMenuOpen(false)
+            setDeleteMenuOpen(false)
+            setItemToolbarMenu(null)
+            setContextMenu({
+              left: Math.min(event.clientX, globalThis.innerWidth - 540),
+              top: Math.min(event.clientY, globalThis.innerHeight - 320),
+            })
+          }}
           draggable
           dragColumnWidth="28px"
           dragCellClassName="!px-1.5"
@@ -764,6 +930,7 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
           multiSelectionRowHighlight={false}
           onReorder={setRows}
           enableHorizontalScroll
+          bodyScrollRef={itemTableScrollRef}
           emptyText="데이터가 없습니다."
         />
       </div>
@@ -775,6 +942,18 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
         <span className="ml-auto">합계: <strong className="text-red-600">{money(totals.part + totals.labor + vat)}</strong></span>
       </div>
       <div className="flex h-8 shrink-0 items-center border-t border-gray-200 bg-white px-3 text-xs text-gray-400">정비이력 전송 :</div>
+      {contextMenu && (
+        <SalesItemContextMenu
+          position={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onDelete={removeSelected}
+          onAddLabor={() => addManualRow('#공임')}
+          onAddPart={() => addManualRow('#부품')}
+          onItemClick={handleMenuItem}
+          onOpenColumnSettings={() => setColumnSettingsOpen(true)}
+        />
+      )}
+      {columnSettingsOpen && <ItemColumnSettingsModal columns={itemColumnConfig} onToggle={toggleItemColumn} onWidth={resizeItemColumn} onReset={resetItemColumns} onClose={() => setColumnSettingsOpen(false)} />}
       {workMenu && (
         <>
           <button type="button" aria-label="작업 선택 닫기" className="fixed inset-0 z-[1050] cursor-default" onClick={() => setWorkMenu(null)} />

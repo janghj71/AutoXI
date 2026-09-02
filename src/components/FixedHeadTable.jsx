@@ -29,6 +29,7 @@ export default function FixedHeadTable({
   emptyText = '데이터가 없습니다.',
   onRowClick,
   onRowDoubleClick,
+  onRowContextMenu,
   getRowProps, //  row별 이벤트/속성 주입
   selectedKey,
   selectedKeys, // Set<any> — 멀티선택 키 집합
@@ -470,6 +471,11 @@ export default function FixedHeadTable({
                     e.preventDefault()
                     e.stopPropagation()
                     onRowDoubleClick?.(row, idx)
+                  },
+                  onContextMenu: (e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onRowContextMenu?.(row, idx, e)
                   },
                   onMouseEnter: () => setHoverKey(key),
                   onMouseLeave: () => setHoverKey(null),

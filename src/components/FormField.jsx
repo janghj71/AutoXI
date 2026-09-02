@@ -19,6 +19,7 @@ export default function FormField({
   labelWidth = 'w-28',
   className = '',
   inputClassName = '',
+  inputProps = {},
   align = 'center',
 }) {
   const valueProps = onChange || readOnly ? { value: value ?? '' } : { defaultValue: value }
@@ -30,6 +31,7 @@ export default function FormField({
       disabled={disabled}
       readOnly={readOnly}
       data-modal-autofocus={autoFocus || undefined}
+      {...inputProps}
       placeholder={placeholder}
       className={`w-full text-xs rounded-sm px-3 py-1.5 border focus:outline-none focus:ring-2 focus:ring-green-600/15 focus:border-green-400 ${
         disabled

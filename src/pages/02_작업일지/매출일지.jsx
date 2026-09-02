@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowLeft, Banknote, BellRing, BookOpen, CalendarDays, Camera, Car, ChevronDown, ChevronLeft, ChevronRight,
+  ArrowDown, ArrowLeft, ArrowUp, Banknote, BellRing, BookOpen, CalendarDays, Camera, Car, ChevronDown, ChevronLeft, ChevronRight,
   ClipboardCheck, ClipboardList, FileOutput, FileText, MessageSquare, NotebookPen, Plus,
-  MoreVertical, Pencil, Printer, Search, Send, Trash2, UserRound, X,
+  Minus, MoreVertical, Pencil, Printer, Search, Send, Settings2, Trash2, UserRound, X,
 } from 'lucide-react'
 import { useAlert } from '../../alerts'
 import Button from '../../components/Button'
@@ -22,14 +22,102 @@ import { openCenteredWindow } from '../../utils/popup'
 const TYPES = ['일반', '경정비', '보험', '보증', '검사']
 const TYPE_STYLE = { 일반: 'bg-slate-100 text-slate-700', 보험: 'bg-blue-50 text-blue-700', 보증: 'bg-amber-50 text-amber-700', 검사: 'bg-violet-50 text-violet-700', 경정비: 'bg-emerald-50 text-emerald-700' }
 const STATUS_STYLE = { 접수: 'bg-gray-100 text-gray-700', 작업대기: 'bg-amber-50 text-amber-700', 작업중: 'bg-blue-50 text-blue-700', 작업완료: 'bg-green-50 text-green-700', 출고완료: 'bg-slate-100 text-slate-500' }
+const DEFAULT_DISPLAY_COLUMNS = [
+  { id: 'date', top: 'date', bottom: 'rono', width: '100px' },
+  { id: 'type', top: 'type', bottom: '', width: '70px' },
+  { id: 'vehicle', top: 'carNo', bottom: 'car', width: '160px' },
+  { id: 'customer', top: 'customer', bottom: 'phone', width: '144px' },
+  { id: 'insurer', top: 'insurer', bottom: 'claim', width: '112px' },
+  { id: 'manager', top: 'manager', bottom: 'referrer', width: '96px' },
+  { id: 'amount', top: 'repair', bottom: 'paid', width: '112px' },
+  { id: 'release', top: 'due', bottom: 'release', width: '144px' },
+  { id: 'status', top: 'status', bottom: 'memo', width: '180px' },
+]
+const DISPLAY_COLUMNS_STORAGE_KEY = 'autoxi.sales-journal.display-columns'
+const cloneDefaultDisplayColumns = () => DEFAULT_DISPLAY_COLUMNS.map((column) => ({ ...column }))
+const loadDisplayColumns = () => {
+  try {
+    const saved = globalThis.localStorage?.getItem(DISPLAY_COLUMNS_STORAGE_KEY)
+    const columns = saved ? JSON.parse(saved) : null
+    if (!Array.isArray(columns)) return cloneDefaultDisplayColumns()
+    return columns
+      .filter((column) => column && typeof column.id === 'string')
+      .map((column) => ({
+        id: column.id,
+        top: typeof column.top === 'string' ? column.top : '',
+        bottom: typeof column.bottom === 'string' ? column.bottom : '',
+        width: /^\d+px$/.test(column.width) ? column.width : '130px',
+      }))
+  } catch {
+    return cloneDefaultDisplayColumns()
+  }
+}
 const ROWS = [
   { id: '2026070001', date: '2026-07-21', type: '보증', carNo: '11가1111', vin: 'KNAP841BBBBK12345', car: 'ALL NEW G80', customer: '홍길동', phone: '010-1010-5252', repair: 306100, paid: 0, insurer: '', manager: '김정비', referrer: '-', status: '작업중', due: '2026-07-23 16:00', release: '', claim: '', memo: '프론트 범퍼 점검', ownerLinked: true },
   { id: '2026070002', date: '2026-07-21', type: '일반', carNo: '37나8254', vin: 'KMHDB51TP9U166970', car: '쏘나타 DN8', customer: '이하나', phone: '010-2241-7730', repair: 185000, paid: 185000, insurer: '', manager: '박기사', referrer: '한마음상사', status: '작업완료', due: '2026-07-21 15:00', release: '2026-07-21', claim: '', memo: '엔진오일 교환', ownerLinked: true },
   { id: '2026070003', date: '2026-07-21', type: '보험', carNo: '162더3308', vin: 'KNAPM81ABGK654321', car: '카니발', customer: '최민수', phone: '010-5512-0091', repair: 1250000, paid: 0, insurer: '삼성화재', manager: '이기술', referrer: '강보험', status: '작업대기', due: '2026-07-25 11:00', release: '', claim: '2026-07-22', memo: '우측 도어 판금', ownerLinked: false },
 ]
 const money = (value) => value.toLocaleString('ko-KR')
+const COLUMN_FIELD_OPTIONS = [
+  { value: 'date', label: '입고일자', render: (row) => row.date || '-' },
+  { value: 'rono', label: 'RONO', render: (row) => row.id || '-' },
+  { value: 'type', label: '업무', align: 'center', render: (row) => <span className={`rounded-full px-2 py-1 text-sm font-medium ${TYPE_STYLE[row.type]}`}>{row.type}</span> },
+  { value: 'carNo', label: '차량번호', render: (row) => <span className="font-semibold text-gray-800">{row.carNo || '-'}</span> },
+  { value: 'car', label: '차량명', render: (row) => row.car || '-' },
+  { value: 'customer', label: '고객명', render: (row) => row.customer || '-' },
+  { value: 'phone', label: '연락처', render: (row) => row.phone || '-' },
+  { value: 'insurer', label: '보험사', render: (row) => row.insurer || '-' },
+  { value: 'claim', label: '청구일자', render: (row) => row.claim || '-' },
+  { value: 'manager', label: '담당자', render: (row) => row.manager || '-' },
+  { value: 'referrer', label: '소개자', render: (row) => row.referrer || '-' },
+  { value: 'repair', label: '정비액', align: 'right', render: (row) => money(row.repair) },
+  { value: 'paid', label: '입금액', align: 'right', render: (row) => <span className={row.repair > row.paid ? 'font-medium text-red-500' : 'text-gray-500'}>{money(row.paid)}</span> },
+  { value: 'due', label: '출고예정일시', render: (row) => row.due || '-' },
+  { value: 'release', label: '출고일자', render: (row) => row.release || '-' },
+  { value: 'status', label: '상태', render: (row) => <span className={`rounded-full px-2 py-1 text-sm font-medium ${STATUS_STYLE[row.status]}`}>{row.status}</span> },
+  { value: 'memo', label: '메모', render: (row) => row.memo || '-' },
+]
 function TwoLineHeader({ top, bottom, align = 'left' }) {
   return <div className={align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'}><div>{top}</div><div className="mt-1 text-gray-400">{bottom || '\u00a0'}</div></div>
+}
+
+function ColumnSettingsModal({ columns, onChange, onMove, onRemove, onAdd, onReset, onClose }) {
+  return (
+    <Modal
+      title="컬럼설정"
+      description="상단·하단 항목은 하나의 표시 컬럼 폭을 공유하며, 폭은 px 단위로 조절할 수 있습니다."
+      size="xl"
+      onClose={onClose}
+      footer={<><Button onClick={onReset}>초기화</Button><Button variant="primary" onClick={onClose}>완료</Button></>}
+    >
+      <div className="rounded-md border border-gray-200">
+        <div className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_72px_92px] gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500">
+          <span>순서</span><span>상단 항목</span><span>하단 항목</span><span className="text-center">폭</span><span className="text-center">관리</span>
+        </div>
+        {columns.map((column, index) => {
+          return (
+            <div key={column.id} className="relative grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_72px_92px] items-center gap-2 border-b border-gray-100 px-3 py-2 last:border-b-0">
+              <span className="text-center text-xs text-gray-400">{index + 1}</span>
+              <Select value={column.top} onChange={(value) => onChange(column.id, 'top', value)} options={COLUMN_FIELD_OPTIONS} placeholder="상단 선택" menuPlacement={index >= columns.length - 2 ? 'up' : 'down'} />
+              <Select value={column.bottom} onChange={(value) => onChange(column.id, 'bottom', value)} options={[{ value: '', label: '표시 안 함' }, ...COLUMN_FIELD_OPTIONS]} menuPlacement={index >= columns.length - 2 ? 'up' : 'down'} />
+              <div className="flex h-8 items-center overflow-hidden rounded-sm border border-gray-300 bg-white">
+                <button type="button" aria-label="컬럼 폭 감소" disabled={Number.parseInt(column.width, 10) <= 70} onClick={() => onChange(column.id, 'width', Number.parseInt(column.width, 10) - 10)} className="inline-flex h-full w-6 items-center justify-center border-r border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-30"><Minus size={13} /></button>
+                <span className="min-w-0 flex-1 text-center text-xs tabular-nums text-gray-700">{Number.parseInt(column.width, 10)}</span>
+                <button type="button" aria-label="컬럼 폭 증가" disabled={Number.parseInt(column.width, 10) >= 360} onClick={() => onChange(column.id, 'width', Number.parseInt(column.width, 10) + 10)} className="inline-flex h-full w-6 items-center justify-center border-l border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-30"><Plus size={13} /></button>
+              </div>
+              <div className="flex items-center gap-1">
+                <button type="button" aria-label="위로 이동" disabled={index === 0} onClick={() => onMove(index, -1)} className="inline-flex size-7 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"><ArrowUp size={15} /></button>
+                <button type="button" aria-label="아래로 이동" disabled={index === columns.length - 1} onClick={() => onMove(index, 1)} className="inline-flex size-7 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"><ArrowDown size={15} /></button>
+                <button type="button" aria-label="컬럼 삭제" onClick={() => onRemove(column.id)} className="inline-flex size-7 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-600"><X size={15} /></button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <Button size="sm" className="mt-3" onClick={onAdd}><Plus size={13} />컬럼 추가</Button>
+      <p className="mt-2 text-xs text-gray-400">관리 컬럼은 목록 행 기능을 위해 항상 표시됩니다.</p>
+    </Modal>
+  )
 }
 
 const historyRows = {
@@ -123,7 +211,9 @@ export default function SalesJournalPage() {
   const alert = useAlert()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('최근 입력순')
-  const [enabledTypes, setEnabledTypes] = useState(TYPES)
+  const [selectedType, setSelectedType] = useState('전체')
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
+  const [displayColumns, setDisplayColumns] = useState(loadDisplayColumns)
   const [selectedId, setSelectedId] = useState(ROWS[0].id)
   const [openMenu, setOpenMenu] = useState(null)
   const [openMessageMenu, setOpenMessageMenu] = useState(false)
@@ -137,6 +227,7 @@ export default function SalesJournalPage() {
   const [openNew, setOpenNew] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
   const photoWinRef = useRef(null)
+  const listBodyScrollRef = useRef(null)
 
   useEffect(() => () => {
     const photoWindow = photoWinRef.current
@@ -146,10 +237,43 @@ export default function SalesJournalPage() {
     photoWinRef.current = null
   }, [])
 
+  useEffect(() => {
+    globalThis.localStorage?.setItem(DISPLAY_COLUMNS_STORAGE_KEY, JSON.stringify(displayColumns))
+  }, [displayColumns])
+
   const rows = useMemo(() => ROWS.filter((row) => {
     const keyword = query.trim().toLowerCase()
-    return enabledTypes.includes(row.type) && (!keyword || [row.id, row.carNo, row.car, row.customer, row.phone, row.insurer].some((value) => value.toLowerCase().includes(keyword)))
-  }), [enabledTypes, query])
+    return (selectedType === '전체' || row.type === selectedType) && (!keyword || [row.id, row.carNo, row.car, row.customer, row.phone, row.insurer].some((value) => value.toLowerCase().includes(keyword)))
+  }), [selectedType, query])
+  const typeOptions = useMemo(() => [
+    { value: '전체', label: `전체 ${ROWS.length}` },
+    ...TYPES.map((type) => ({ value: type, label: `${type} ${ROWS.filter((row) => row.type === type).length}` })),
+  ], [])
+  const updateDisplayColumns = (updater) => {
+    const scrollLeft = listBodyScrollRef.current?.scrollLeft ?? 0
+    setDisplayColumns(updater)
+    globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(() => {
+      if (listBodyScrollRef.current) listBodyScrollRef.current.scrollLeft = scrollLeft
+    }))
+  }
+  const changeDisplayColumn = (id, key, value) => updateDisplayColumns((prev) => prev.map((column) => {
+    if (column.id !== id) return column
+    if (key === 'width') {
+      const width = Math.min(360, Math.max(70, Number(value) || 70))
+      return { ...column, width: `${width}px` }
+    }
+    return { ...column, [key]: value }
+  }))
+  const moveDisplayColumn = (index, direction) => updateDisplayColumns((prev) => {
+    const targetIndex = index + direction
+    if (targetIndex < 0 || targetIndex >= prev.length) return prev
+    const next = [...prev]
+    ;[next[index], next[targetIndex]] = [next[targetIndex], next[index]]
+    return next
+  })
+  const removeDisplayColumn = (id) => updateDisplayColumns((prev) => prev.filter((column) => column.id !== id))
+  const addDisplayColumn = () => updateDisplayColumns((prev) => [...prev, { id: `custom-${Date.now()}`, top: '', bottom: '', width: '130px' }])
+  const resetColumns = () => updateDisplayColumns(cloneDefaultDisplayColumns())
   const selected = rows.find((row) => row.id === selectedId)
   const openPhotoViewer = (sale) => {
     if (!sale) return
@@ -188,7 +312,6 @@ export default function SalesJournalPage() {
     }
     setSpecificationOpen(true)
   }
-  const toggleType = (type) => setEnabledTypes((prev) => prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type])
   const openRowMenu = (event, row) => {
     event.stopPropagation()
     setSelectedId(row.id)
@@ -200,16 +323,22 @@ export default function SalesJournalPage() {
     })
   }
   const mainColumns = [
-    { key: 'date', title: <TwoLineHeader top="입고일자" bottom="RONO" />, width: '100px', render: (_value, row) => <><div>{row.date}</div><div className="mt-1 font-medium text-gray-500">{row.id}</div></> },
-    { key: 'type', title: <TwoLineHeader top="업무" align="center" />, width: '60px', align: 'center', render: (value) => <span className={`rounded-full px-2 py-1 text-sm font-medium ${TYPE_STYLE[value]}`}>{value}</span> },
-    { key: 'carNo', title: <TwoLineHeader top="차량번호" bottom="차량명" />, width: '160px', render: (_value, row) => <><div className="font-semibold text-gray-800">{row.carNo}</div><div className="mt-1 text-gray-500">{row.car}</div></> },
-    { key: 'customer', title: <TwoLineHeader top="고객명" bottom="연락처" />, width: '144px', render: (_value, row) => <><div>{row.customer}</div><div className="mt-1 text-gray-500">{row.phone}</div></> },
-    { key: 'insurer', title: <TwoLineHeader top="보험사" bottom="청구일자" />, width: '112px', render: (_value, row) => <><div>{row.insurer || '-'}</div><div className="mt-1 text-gray-500">{row.claim || '-'}</div></> },
-    { key: 'manager', title: <TwoLineHeader top="담당자" bottom="소개자" />, width: '96px', render: (_value, row) => <><div>{row.manager}</div><div className="mt-1 text-gray-500">{row.referrer}</div></> },
-    { key: 'repair', title: <TwoLineHeader top="정비액" bottom="입금액" align="right" />, width: '112px', align: 'right', render: (_value, row) => <><div>{money(row.repair)}</div><div className={`mt-1 ${row.repair > row.paid ? 'font-medium text-red-500' : 'text-gray-500'}`}>{money(row.paid)}</div></> },
-    { key: 'due', title: <TwoLineHeader top="출고예정일시" bottom="출고일자" />, width: '144px', render: (_value, row) => <><div>{row.due}</div><div className="mt-1 text-gray-500">{row.release || '-'}</div></> },
-    { key: 'status', title: <TwoLineHeader top="상태" bottom="메모" />, width: '180px', render: (_value, row) => <><div><span className={`rounded-full px-2 py-1 text-sm font-medium ${STATUS_STYLE[row.status]}`}>{row.status}</span></div><div className="mt-1 text-gray-500">{row.memo}</div></> },
     { key: '__actions', title: '관리', width: '56px', align: 'center', render: (_value, row) => <button type="button" aria-label="관리 메뉴" onClick={(event) => openRowMenu(event, row)} className="inline-flex size-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"><MoreVertical size={16} /></button> },
+  ]
+  const visibleColumns = [
+    ...displayColumns.filter((column) => column.top).map((column) => {
+      const top = COLUMN_FIELD_OPTIONS.find((field) => field.value === column.top)
+      const bottom = COLUMN_FIELD_OPTIONS.find((field) => field.value === column.bottom)
+      const align = top?.align || bottom?.align || 'left'
+      return {
+        key: `display-${column.id}`,
+        title: <TwoLineHeader top={top?.label} bottom={bottom?.label} align={align} />,
+        width: column.width,
+        align,
+        render: (_value, row) => <><div>{top?.render(row)}</div>{bottom && <div className="mt-1 text-gray-500">{bottom.render(row)}</div>}</>,
+      }
+    }),
+    mainColumns.find((column) => column.key === '__actions'),
   ]
 
   if (editingRow) {
@@ -223,32 +352,27 @@ export default function SalesJournalPage() {
 
       <div className="grid min-h-0 flex-1 transition-[grid-template-columns] duration-200" style={{ gridTemplateColumns: historyOpen ? 'minmax(720px, 1fr) 52px minmax(0, 650px)' : 'minmax(720px, 1fr) 52px' }}>
       <div className="flex min-h-0 min-w-0 flex-col">
-      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2">
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-[11px] font-semibold text-gray-600">작업일자</span>
-          <div className="flex h-8 items-center rounded-md border border-gray-300 bg-white">
-            <button type="button" className="px-2 text-gray-400 hover:text-green-600"><ChevronLeft size={14} /></button>
-            <div className="flex items-center gap-1.5 border-x border-gray-200 px-2 text-xs text-gray-700"><CalendarDays size={13} className="text-gray-400" />2026-07-21</div>
-            <button type="button" className="px-2 text-gray-400 hover:text-green-600"><ChevronRight size={14} /></button>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <button type="button" aria-pressed={enabledTypes.length === TYPES.length} onClick={() => setEnabledTypes(TYPES)} className={`h-8 rounded-md border px-2.5 text-[11px] font-medium transition-colors ${enabledTypes.length === TYPES.length ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>전체 <span className="ml-0.5 opacity-60">{ROWS.length}</span></button>
-          {TYPES.map((type) => {
-            const active = enabledTypes.includes(type)
-            return <button key={type} type="button" aria-pressed={active} onClick={() => toggleType(type)} className={`h-8 rounded-md border px-2.5 text-[11px] font-medium transition-colors ${active ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>{type} <span className="ml-0.5 opacity-60">{ROWS.filter((row) => row.type === type).length}</span></button>
-          })}
-        </div>
-        <div className="ml-auto flex h-8 w-72 shrink-0 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 focus-within:border-green-400 focus-within:ring-2 focus-within:ring-green-600/15 xl:w-80">
+      <div className="order-2 flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2">
+        <div className="flex h-8 w-72 shrink-0 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 focus-within:border-green-400 focus-within:ring-2 focus-within:ring-green-600/15 xl:w-80">
           <Search size={14} className="text-gray-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="차량번호, 고객명, 연락처, RONO 검색" className="min-w-0 flex-1 bg-transparent text-xs outline-none" />
         </div>
-        <Select className="w-32 shrink-0" value={sort} onChange={setSort} options={['최근 입력순', '입고일자순', '차량번호순', '고객명순']} />
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-[11px] font-semibold text-gray-600">작업일자</span>
+            <div className="flex h-8 items-center rounded-md border border-gray-300 bg-white">
+              <button type="button" className="px-2 text-gray-400 hover:text-green-600"><ChevronLeft size={14} /></button>
+              <div className="flex items-center gap-1.5 border-x border-gray-200 px-2 text-xs text-gray-700"><CalendarDays size={13} className="text-gray-400" />2026-07-21</div>
+              <button type="button" className="px-2 text-gray-400 hover:text-green-600"><ChevronRight size={14} /></button>
+            </div>
+          </div>
+          <Select className="w-24 shrink-0" value={selectedType} onChange={setSelectedType} options={typeOptions} />
+          <Select className="w-32 shrink-0" value={sort} onChange={setSort} options={['최근 입력순', '입고일자순', '차량번호순', '고객명순']} />
+          <Button size="sm" onClick={() => setColumnSettingsOpen(true)}><Settings2 size={14} />컬럼설정</Button>
+        </div>
       </div>
 
-      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2">
+      <div className="order-1 flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2">
         <Button size="sm" disabled={!selected} onClick={() => setCustomerOpen(true)}><UserRound size={14} />고객</Button>
-        <Button size="sm" disabled={!selected} onClick={openVehicleRegistry}><BookOpen size={14} />차량원부</Button>
-        <Button size="sm" disabled={!selected} onClick={openSpecification}><Car size={14} />규격</Button>
         <span className="mx-0.5 h-5 w-px bg-gray-200" />
         <button type="button" disabled={!selected} className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-500 bg-blue-50 px-2.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
           <ClipboardCheck size={14} />온라인 점검정비명세서 발행
@@ -257,12 +381,12 @@ export default function SalesJournalPage() {
           <Button size="sm" disabled={!selected} onClick={() => setOpenMessageMenu((prev) => !prev)}><MessageSquare size={14} />문자·알림<ChevronDown size={13} /></Button>
           {openMessageMenu && <><button type="button" aria-label="문자 메뉴 닫기" className="fixed inset-0 z-20 cursor-default" onClick={() => setOpenMessageMenu(false)} /><div className="absolute left-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-xl">
             <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold text-gray-400">개별 발송</div>
-            {['개별 문자발송', '점검정비견적서(고객용)', '점검정비명세서(고객용)', '개인정보활용동의서', '개별 알림톡발송'].map((label) => <button key={label} type="button" onClick={() => setOpenMessageMenu(false)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50"><MessageSquare size={13} className="text-gray-400" />{label}</button>)}
+            {['개별 문자발송', '점검정비견적서(고객용)', '점검정비명세서(고객용)', '개인정보활용동의서', '개별 알림톡발송'].map((label) => <button key={label} type="button" onClick={() => setOpenMessageMenu(false)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"><MessageSquare size={13} className="text-gray-400" />{label}</button>)}
             <div className="my-1 border-t border-gray-100" />
             <div className="px-3 pb-1 pt-1 text-[10px] font-semibold text-gray-400">진행 안내</div>
-            {[['입고문자', BellRing], ['수리완료문자', Send], ['출고문자', FileOutput]].map(([label, Icon]) => <button key={label} type="button" onClick={() => setOpenMessageMenu(false)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50"><Icon size={13} className="text-gray-400" />{label}</button>)}
+            {[['입고문자', BellRing], ['수리완료문자', Send], ['출고문자', FileOutput]].map(([label, Icon]) => <button key={label} type="button" onClick={() => setOpenMessageMenu(false)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"><Icon size={13} className="text-gray-400" />{label}</button>)}
             <div className="my-1 border-t border-gray-100" />
-            <button type="button" onClick={() => setOpenMessageMenu(false)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-gray-700 hover:bg-gray-50"><BellRing size={13} className="text-gray-400" />개인정보 동의 푸시</button>
+            <button type="button" onClick={() => setOpenMessageMenu(false)} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"><BellRing size={13} className="text-gray-400" />개인정보 동의 푸시</button>
           </div></>}
         </div>
         <span className="mx-0.5 h-5 w-px bg-gray-200" />
@@ -271,21 +395,22 @@ export default function SalesJournalPage() {
         <Button size="sm" disabled={!selected}><FileOutput size={14} />출고</Button>
       </div>
 
-      <div className="min-h-0 flex-1 bg-white">
+      <div className="order-3 min-h-0 flex-1 bg-white">
         <FixedHeadTable
-          columns={mainColumns}
+          columns={visibleColumns}
           rows={rows}
           rowKey={(row) => row.id}
           height={null}
           enableHorizontalScroll={historyOpen}
           selectedKey={selectedId}
+          bodyScrollRef={listBodyScrollRef}
           onRowClick={(row) => setSelectedId(row.id)}
           onRowDoubleClick={(row) => setEditingRow(row)}
           emptyText="조건에 맞는 매출일지가 없습니다."
         />
       </div>
 
-      <div className="flex h-8 shrink-0 items-center border-t border-gray-200 bg-gray-50 px-3 text-[11px] text-gray-500">조회 {rows.length}건 · 선택 RONO {selectedId}</div>
+      <div className="order-4 flex h-8 shrink-0 items-center border-t border-gray-200 bg-gray-50 px-3 text-[11px] text-gray-500">조회 {rows.length}건 · 선택 RONO {selectedId}</div>
       </div>
 
       <nav className="z-20 flex min-w-0 flex-col items-center gap-2 overflow-x-hidden overflow-y-auto border-l border-gray-200 bg-gray-50 px-1.5 py-2">
@@ -308,6 +433,8 @@ export default function SalesJournalPage() {
         <button type="button" aria-label="관리 메뉴 닫기" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpenMenu(null)} />
         <div className="fixed z-50 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 text-left shadow-lg" style={{ left: openMenu.left, top: openMenu.top }}>
           {[
+            { label: '차량원부', icon: BookOpen },
+            { label: '규격', icon: Car },
             { label: '사진', icon: Camera },
             { label: '메모', icon: NotebookPen },
             { separator: true },
@@ -319,13 +446,19 @@ export default function SalesJournalPage() {
             { label: '견적보관', icon: FileText },
           ].map((item, index) => item.separator
             ? <div key={`separator-${index}`} className="my-1 border-t border-gray-100" />
-            : <button key={item.label} type="button" onClick={() => { if (item.label === '사진') openPhotoViewer(rows.find((row) => row.id === openMenu.id)); setOpenMenu(null) }} className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${item.danger ? 'text-red-600' : 'text-gray-700'}`}><item.icon size={14} />{item.label}</button>)}
+            : <button key={item.label} type="button" onClick={() => {
+              if (item.label === '차량원부') openVehicleRegistry()
+              if (item.label === '규격') openSpecification()
+              if (item.label === '사진') openPhotoViewer(rows.find((row) => row.id === openMenu.id))
+              setOpenMenu(null)
+            }} className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${item.danger ? 'text-red-600' : 'text-gray-700'}`}><item.icon size={14} />{item.label}</button>)}
         </div>
       </>}
 
       {customerOpen && selected && <VehicleCustomerModal key={selected.id} vehicle={selected} hasOwner={selected.ownerLinked} onClose={() => setCustomerOpen(false)} />}
       {paymentOpen && selected && <PaymentModal key={selected.id} sale={selected} onClose={() => setPaymentOpen(false)} />}
       {printFormatOpen && <PrintFormatModal menuCode="0201" menuName="매출일지" onClose={() => setPrintFormatOpen(false)} />}
+      {columnSettingsOpen && <ColumnSettingsModal columns={displayColumns} onChange={changeDisplayColumn} onMove={moveDisplayColumn} onRemove={removeDisplayColumn} onAdd={addDisplayColumn} onReset={resetColumns} onClose={() => setColumnSettingsOpen(false)} />}
       {vehicleRegistryOpen && selected && <VehicleRegistryModal key={selected.id} vehicle={{ carNo: selected.carNo, customer: selected.customer, carName: selected.car, vin: selected.vin }} onClose={() => setVehicleRegistryOpen(false)} />}
       {specificationOpen && selected && <VehicleSpecificationModal key={selected.id} vehicle={{ carNo: selected.carNo, vin: selected.vin }} onClose={() => setSpecificationOpen(false)} />}
 
