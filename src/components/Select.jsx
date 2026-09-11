@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Check } from 'lucide-react'
 
 /**
@@ -19,33 +20,80 @@ export default function Select({
   menuPlacement = 'down',
 }) {
   const rootRef = useRef(null)
+  const menuRef = useRef(null)
   const [open, setOpen] = useState(false)
+  const [menuStyle, setMenuStyle] = useState({})
 
   const items = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }))
   const selected = items.find((i) => i.value === value)
 
   useEffect(() => {
     const onDown = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+      const clickedTrigger = rootRef.current?.contains(e.target)
+      const clickedMenu = menuRef.current?.contains(e.target)
+      if (!clickedTrigger && !clickedMenu) setOpen(false)
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
+
+  const updateMenuPosition = useCallback(() => {
+    const root = rootRef.current
+    if (!root) return
+
+    const rect = root.getBoundingClientRect()
+    const viewportGap = 8
+    const controlGap = 4
+    const availableHeight = menuPlacement === 'up'
+      ? rect.top - viewportGap
+      : globalThis.innerHeight - rect.bottom - viewportGap
+
+    setMenuStyle({
+      position: 'fixed',
+      left: `${Math.max(viewportGap, rect.left)}px`,
+      width: `${Math.min(rect.width, globalThis.innerWidth - viewportGap * 2)}px`,
+      maxHeight: `${Math.max(96, Math.floor(availableHeight - controlGap))}px`,
+      ...(menuPlacement === 'up'
+        ? { bottom: `${globalThis.innerHeight - rect.top + controlGap}px` }
+        : { top: `${rect.bottom + controlGap}px` }),
+      zIndex: 1100,
+    })
+  }, [menuPlacement])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    updateMenuPosition()
+    globalThis.addEventListener('resize', updateMenuPosition)
+    globalThis.addEventListener('scroll', updateMenuPosition, true)
+    return () => {
+      globalThis.removeEventListener('resize', updateMenuPosition)
+      globalThis.removeEventListener('scroll', updateMenuPosition, true)
+    }
+  }, [open, updateMenuPosition])
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setOpen((o) => !o)}
+        onClick={() => {
+          if (disabled) return
+          if (!open) updateMenuPosition()
+          setOpen((current) => !current)
+        }}
         className={`w-full flex items-center justify-between ${radius} border border-gray-300 px-3 py-1.5 text-xs text-left focus:outline-none focus:ring-2 focus:ring-green-600/15 focus:border-green-400 ${disabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : `bg-white ${selected ? 'text-gray-800' : 'text-gray-400'}`} ${buttonClassName}`}
       >
         <span className="truncate">{selected ? selected.label : placeholder}</span>
         <ChevronDown size={14} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && !disabled && (
-        <div className={`absolute left-0 z-50 w-full rounded-sm border border-gray-200 bg-white py-1 shadow-lg max-h-56 overflow-auto ${menuPlacement === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+      {open && !disabled && createPortal(
+        <div
+          ref={menuRef}
+          className="overflow-x-hidden overflow-y-auto rounded-sm border border-gray-200 bg-white py-1 shadow-lg"
+          style={menuStyle}
+        >
           {items.map((it) => {
             const active = it.value === value
             return (
@@ -67,7 +115,8 @@ export default function Select({
               </button>
             )
           })}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

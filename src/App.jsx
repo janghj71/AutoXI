@@ -14,6 +14,7 @@ import 보험사담당자등록 from './pages/01_기초코드/보험사담당자
 import 차량명등록 from './pages/01_기초코드/차량명등록'
 import 사용자권한등록 from './pages/01_기초코드/사용자권한등록'
 import 매출일지 from './pages/02_작업일지/매출일지'
+import 견적일지 from './pages/02_작업일지/견적일지'
 import { menuData } from './data/menuData'
 import PhotoViewer from './pages/PhotoViewer'
 import LaborItemsPopup from './pages/LaborItemsPopup'
@@ -32,6 +33,7 @@ const PAGE_COMPONENTS = {
   '0113': 보험사조회,
   '0111': 업체정보,
   '0201': 매출일지,
+  '0210': 견적일지,
   '0604': 나의셋트,
 }
 

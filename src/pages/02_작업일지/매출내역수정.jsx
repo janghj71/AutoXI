@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowRight, ArrowUpDown, Banknote, Car, CheckCircle2, ChevronDown, ClipboardEdit, FileText, FlaskConical, History,
+  ArrowUpDown, Banknote, Car, CheckCircle2, ChevronDown, ChevronRight, ClipboardEdit, ClipboardList, FileText, FlaskConical, History,
   Image as ImageIcon, Paintbrush, Plus, Printer, Radio, Save, Search, Send, Sparkles, Trash2,
   Minus, Ruler, Settings2, UserRound, Wrench, X,
 } from 'lucide-react'
@@ -9,6 +9,7 @@ import Button from '../../components/Button'
 import FixedHeadTable from '../../components/FixedHeadTable'
 import FormField from '../../components/FormField'
 import Modal from '../../components/Modal'
+import PageHeader from '../../components/PageHeader'
 import Select from '../../components/Select'
 import TelField from '../../components/TelField'
 import Toggle from '../../components/Toggle'
@@ -22,9 +23,10 @@ import VehicleCustomerModal from './VehicleCustomerModal'
 import VehicleRegistryModal from './VehicleRegistryModal'
 import VehicleSpecificationModal from './VehicleSpecificationModal'
 import WorkOrderModal from './WorkOrderModal'
-import BasicMaintenanceMenu from './BasicMaintenanceMenu'
+import BasicMaintenanceModal from './BasicMaintenanceMenu'
 import PrintFormatModal from './PrintFormatModal'
 import EstimateItemsModal from './EstimateItemsModal'
+import InsuranceEstimate2017Modal from './InsuranceEstimate2017Modal'
 import PartsPurchaseModal from './PartsPurchaseModal'
 import InventoryPartsModal from './InventoryPartsModal'
 import VehicleSetWorkModal from './VehicleSetWorkModal'
@@ -131,7 +133,22 @@ const BUSINESS_MENU_ITEMS = [
   { label: '중복체크', icon: CheckCircle2 },
   { label: '정비이력전송', icon: Radio },
 ]
-const ITEM_COLUMN_STORAGE_KEY = 'autoxi.sales-detail.item-columns'
+const INSPECTION_OPTIONS = {
+  vehicleClass: ['승용', '승합', '화물', '특수'],
+  usageClass: ['관용', '자가용', '사업용'],
+  inspectionClass: ['없음', '종합', '정기'],
+  inspectionCheckClass: ['없음', '정기', '임시'],
+}
+const resolveWorkProfile = (type) => {
+  const value = String(type ?? '').trim()
+  if (value.startsWith('12') || value === '보험') return { code: '12', label: '보험', insurance: true, allowLabor: true, allowLaborAdd: true, allowClaimBusiness: true, allowParts: true, allowPartAdd: true, allowPreventive: true, inspection: false }
+  if (value.startsWith('13') || value === '보증') return { code: '13', label: '보증', insurance: false, allowLabor: false, allowLaborAdd: true, allowClaimBusiness: false, allowParts: true, allowPartAdd: true, allowPreventive: true, inspection: false }
+  if (value.startsWith('14') || value === '검사') return { code: '14', label: '검사', insurance: false, allowLabor: false, allowLaborAdd: true, allowClaimBusiness: false, allowParts: false, allowPartAdd: false, allowPreventive: false, inspection: true }
+  if (value.includes('경정비')) return { code: '경정비', label: '경정비', insurance: false, allowLabor: false, allowLaborAdd: true, allowClaimBusiness: false, allowParts: true, allowPartAdd: true, allowPreventive: true, inspection: false }
+  return { code: '11', label: '일반', insurance: false, allowLabor: true, allowLaborAdd: true, allowClaimBusiness: true, allowParts: true, allowPartAdd: true, allowPreventive: true, inspection: false }
+}
+const ITEM_COLUMN_STORAGE_PREFIX = 'autoxi.sales-detail.item-columns'
+const INSPECTION_DEFAULT_HIDDEN_COLUMNS = new Set(['manufacturerCode', 'work', 'hour', 'unitPrice', 'partAmt', 'prevention', 'partType', 'supplier'])
 const ITEM_COLUMN_DEFAULTS = [
   ['kind', '구분', '58px'], ['manufacturerCode', '제작사품번', '135px'], ['content', '작업내용', '280px'], ['work', '작업', '70px'],
   ['hour', '시간', '52px'], ['unitPrice', '단가', '90px'], ['partAmt', '부품액', '100px'], ['laborAmt', '공임액', '100px'],
@@ -139,18 +156,20 @@ const ITEM_COLUMN_DEFAULTS = [
   ['partType', '부품', '58px'], ['releaseDate', '출고일자', '100px'], ['pointPolicy', '적립', '64px'], ['supplier', '매입처', '120px'],
 ].map(([key, label, width]) => ({ key, label, width, visible: true }))
 const cloneItemColumnDefaults = () => ITEM_COLUMN_DEFAULTS.map((column) => ({ ...column }))
-const loadItemColumnConfig = () => {
+const getItemColumnStorageKey = (workProfile) => `${ITEM_COLUMN_STORAGE_PREFIX}.${workProfile?.code ?? '11'}`
+const getDefaultItemColumnConfig = (workProfile) => cloneItemColumnDefaults().map((column) => ({ ...column, visible: workProfile?.code === '14' ? !INSPECTION_DEFAULT_HIDDEN_COLUMNS.has(column.key) : true }))
+const loadItemColumnConfig = (workProfile) => {
   try {
-    const saved = globalThis.localStorage?.getItem(ITEM_COLUMN_STORAGE_KEY)
+    const saved = globalThis.localStorage?.getItem(getItemColumnStorageKey(workProfile))
     const parsed = saved ? JSON.parse(saved) : null
-    if (!Array.isArray(parsed)) return cloneItemColumnDefaults()
+    if (!Array.isArray(parsed)) return getDefaultItemColumnConfig(workProfile)
     const savedByKey = new Map(parsed.filter((column) => ITEM_COLUMN_DEFAULTS.some((item) => item.key === column?.key)).map((column) => [column.key, column]))
     return ITEM_COLUMN_DEFAULTS.map((column) => {
       const savedColumn = savedByKey.get(column.key)
       return { ...column, visible: savedColumn ? savedColumn.visible !== false : false, width: savedColumn && /^\d+px$/.test(savedColumn.width) ? savedColumn.width : column.width }
     })
   } catch {
-    return cloneItemColumnDefaults()
+    return getDefaultItemColumnConfig(workProfile)
   }
 }
 const money = (value) => (value || 0).toLocaleString('ko-KR')
@@ -194,6 +213,10 @@ const initialMaster = (row) => ({
   detachRate: '25,000',
   sheetRate: '28,000',
   paintRate: '26,000',
+  vehicleClass: '승용',
+  usageClass: '자가용',
+  inspectionClass: '없음',
+  inspectionCheckClass: '없음',
 })
 
 const initialClaims = (row) => [{
@@ -224,7 +247,7 @@ const initialItems = [
   { id: 'i3', kind: '도장', manufacturerCode: 'PAINT-1W', content: '도어 우측 교환도장', work: '도장', hour: '2.5', unitPrice: 26000, partAmt: 0, laborAmt: 65000, worker: '이도장', prevention: '140', workStatus: '작업대기', molit: 'B05', partType: '', releaseDate: '', pointPolicy: '미적용', supplier: '' },
 ]
 
-function ReceptionSection({ master, setMaster, onOpenVehicleName, onOpenCompany, onOpenCustomer, onOpenVehicleRegistry, onOpenSpecification }) {
+function ReceptionSection({ master, setMaster, profile, onOpenVehicleName, onOpenCompany, onOpenCustomer, onOpenVehicleRegistry, onOpenSpecification }) {
   const set = (key) => (value) => setMaster((prev) => ({ ...prev, [key]: value }))
   const setInput = (key) => (event) => set(key)(event.target.value)
   const inputClass = 'w-full min-w-0 rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 outline-none focus:border-green-400 focus:ring-2 focus:ring-green-600/15'
@@ -246,7 +269,8 @@ function ReceptionSection({ master, setMaster, onOpenVehicleName, onOpenCompany,
   }
 
   return (
-    <div className="grid shrink-0 grid-cols-3 gap-x-6 gap-y-2 border-b border-gray-200 px-4 py-3" onKeyDown={moveReceptionFocus}>
+    <div className="shrink-0 border-b border-gray-200" onKeyDown={moveReceptionFocus}>
+    <div className="grid grid-cols-3 gap-x-6 gap-y-2 px-4 py-3">
       <FormField label="차량번호" labelWidth="w-20" required>
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <input data-reception-order="1" value={master.carNo} onChange={setInput('carNo')} className={inputClass} />
@@ -311,9 +335,9 @@ function ReceptionSection({ master, setMaster, onOpenVehicleName, onOpenCompany,
         </div>
       </FormField>
       <FormField label="부가세" labelWidth="w-20"><Select className="w-full" value={master.vatType} onChange={set('vatType')} options={SALES_VAT_OPTIONS} /></FormField>
-      <FormField label="청구일자" labelWidth="w-20" type="date" value={master.claimDate} onChange={setInput('claimDate')} inputProps={{ 'data-reception-order': '17' }} />
+      {profile.insurance && <FormField label="청구일자" labelWidth="w-20" type="date" value={master.claimDate} onChange={setInput('claimDate')} inputProps={{ 'data-reception-order': '17' }} />}
 
-      <FormField label="차대번호" labelWidth="w-20">
+      <FormField label="차대번호" labelWidth="w-20" className="col-start-1">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <input data-reception-order="7" value={master.vin} onChange={setInput('vin')} className={inputClass} />
           <button type="button" onClick={onOpenSpecification} className="inline-flex h-[30px] shrink-0 items-center justify-center gap-1 rounded-sm border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
@@ -323,56 +347,114 @@ function ReceptionSection({ master, setMaster, onOpenVehicleName, onOpenCompany,
       </FormField>
       <FormField label="고객의 소리" labelWidth="w-20" className="col-span-2" value={master.customerVoice} onChange={setInput('customerVoice')} inputProps={{ 'data-reception-order': '13' }} />
     </div>
+    {profile.inspection && <section className="border-t border-gray-100 bg-amber-50/40 px-4 py-3">
+      <div className="mb-2 text-xs font-semibold text-amber-800">검사정보</div>
+      <div className="grid grid-cols-4 gap-x-6 gap-y-2">
+        <FormField label="차종구분" labelWidth="w-20"><Select className="w-full" value={master.vehicleClass} onChange={set('vehicleClass')} options={INSPECTION_OPTIONS.vehicleClass} /></FormField>
+        <FormField label="용도구분" labelWidth="w-20"><Select className="w-full" value={master.usageClass} onChange={set('usageClass')} options={INSPECTION_OPTIONS.usageClass} /></FormField>
+        <FormField label="검사구분" labelWidth="w-20"><Select className="w-full" value={master.inspectionClass} onChange={set('inspectionClass')} options={INSPECTION_OPTIONS.inspectionClass} /></FormField>
+        <FormField label="점검구분" labelWidth="w-20"><Select className="w-full" value={master.inspectionCheckClass} onChange={set('inspectionCheckClass')} options={INSPECTION_OPTIONS.inspectionCheckClass} /></FormField>
+      </div>
+    </section>}
+    </div>
   )
 }
 
-function ToolbarMenu({ id, label, icon: Icon, items, openMenu, setOpenMenu, onItemClick, size = 'md' }) {
+function ToolbarMenu({ id, label, icon: Icon, items, openMenu, setOpenMenu, onItemClick, size = 'md', disabled = false }) {
   const open = openMenu === id
   const [openSubMenu, setOpenSubMenu] = useState(null)
+  const [openNestedSubMenu, setOpenNestedSubMenu] = useState(null)
 
   useEffect(() => {
-    if (!open) setOpenSubMenu(null)
+    if (!open) {
+      setOpenSubMenu(null)
+      setOpenNestedSubMenu(null)
+    }
   }, [open])
 
   return (
     <div className="relative">
-      <Button size={size} onClick={() => setOpenMenu(open ? null : id)}>
+      <Button size={size} disabled={disabled} onClick={() => setOpenMenu(open ? null : id)}>
         <Icon size={13} />{label}<ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </Button>
       {open && (
         <>
           <button type="button" aria-label={`${label} 메뉴 닫기`} onClick={() => setOpenMenu(null)} className="fixed inset-0 z-20 cursor-default" />
           <div className="absolute left-0 top-full z-30 mt-1 min-w-48 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-            {items.map(({ label: itemLabel, icon: ItemIcon, subItems }) => (
+            {items.map((item) => {
+              const { label: itemLabel, icon: ItemIcon, subItems, disabled: itemDisabled = false } = item
+              return (
               <div key={itemLabel} className="relative">
                 <button
                   type="button"
+                  disabled={itemDisabled}
                   onClick={() => {
+                    if (itemDisabled) return
                     if (subItems?.length) {
                       setOpenSubMenu((current) => current === itemLabel ? null : itemLabel)
+                      setOpenNestedSubMenu(null)
                       return
                     }
-                    onItemClick?.(itemLabel)
+                    onItemClick?.(itemLabel, item)
                     setOpenMenu(null)
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
                 >
                   <ItemIcon size={14} className="shrink-0 text-gray-400" />
                   <span className="flex-1">{itemLabel}</span>
                   {subItems?.length ? <ChevronDown size={12} className="-rotate-90 text-gray-400" /> : null}
                 </button>
                 {openSubMenu === itemLabel && subItems?.length ? (
-                  <div className="absolute left-full top-0 z-40 ml-1 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                    {subItems.map(({ label: subLabel, icon: SubIcon }) => (
-                      <button key={subLabel} type="button" onClick={() => { onItemClick?.(subLabel); setOpenMenu(null) }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700">
-                        <SubIcon size={14} className="shrink-0 text-gray-400" />
-                        <span>{subLabel}</span>
-                      </button>
-                    ))}
+                  <div className="absolute left-full top-0 z-40 ml-1 min-w-40 overflow-visible rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                    {subItems.map((subItem) => {
+                      const { label: subLabel, icon: SubIcon, subItems: nestedItems } = subItem
+                      return (
+                        <div key={subLabel} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (nestedItems?.length) {
+                                setOpenNestedSubMenu((current) => current === subLabel ? null : subLabel)
+                                return
+                              }
+                              onItemClick?.(subLabel, subItem)
+                              setOpenMenu(null)
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700"
+                          >
+                            <SubIcon size={14} className="shrink-0 text-gray-400" />
+                            <span className="flex-1 whitespace-nowrap">{subLabel}</span>
+                            {nestedItems?.length ? <ChevronDown size={12} className="-rotate-90 text-gray-400" /> : null}
+                          </button>
+                          {openNestedSubMenu === subLabel && nestedItems?.length ? (
+                            <div className="absolute left-full top-0 z-50 ml-1 min-w-64 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                              {nestedItems.map((nestedItem) => {
+                                const NestedIcon = nestedItem.icon
+                                return (
+                                  <button
+                                    key={nestedItem.value ?? nestedItem.label}
+                                    type="button"
+                                    onClick={() => {
+                                      onItemClick?.(nestedItem.label, nestedItem)
+                                      setOpenMenu(null)
+                                    }}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-green-50 hover:text-green-700"
+                                  >
+                                    <NestedIcon size={14} className="shrink-0 text-gray-400" />
+                                    <span className="whitespace-nowrap">{nestedItem.label}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : null}
               </div>
-            ))}
+              )
+            })}
           </div>
         </>
       )}
@@ -388,22 +470,24 @@ function SegmentToggle({ value, onChange, options }) {
   )
 }
 
-function SalesItemContextMenu({ position, onClose, onDelete, onAddLabor, onAddPart, onItemClick, onOpenColumnSettings }) {
+function SalesItemContextMenu({ position, profile, onClose, onDelete, onAddLabor, onAddPart, onItemClick, onOpenColumnSettings }) {
   const [openMenu, setOpenMenu] = useState(null)
   const [openSubMenu, setOpenSubMenu] = useState(null)
+  const [openNestedSubMenu, setOpenNestedSubMenu] = useState(null)
   const menuGroups = [
-    { label: '공임', icon: Wrench, items: LABOR_MENU_ITEMS },
-    { label: '부품', icon: Search, items: PART_MENU_ITEMS },
-    { label: '차량', icon: Car, items: VEHICLE_MENU_ITEMS },
-    { label: '업무', icon: FileText, items: BUSINESS_MENU_ITEMS },
+    ...(profile.allowLabor ? [{ label: '공임', icon: Wrench, items: LABOR_MENU_ITEMS }] : []),
+    ...(profile.allowParts ? [{ label: '부품', icon: Search, items: PART_MENU_ITEMS }] : []),
+    { label: '차량', icon: Car, items: profile.allowPreventive ? VEHICLE_MENU_ITEMS : VEHICLE_MENU_ITEMS.filter((item) => item.label !== '예방') },
+    { label: '업무', icon: FileText, items: profile.allowClaimBusiness ? BUSINESS_MENU_ITEMS : BUSINESS_MENU_ITEMS.filter((item) => !['견적청구', '중복체크'].includes(item.label)) },
   ]
   const close = () => {
     setOpenMenu(null)
     setOpenSubMenu(null)
+    setOpenNestedSubMenu(null)
     onClose()
   }
-  const run = (label) => {
-    onItemClick(label)
+  const run = (label, item) => {
+    onItemClick(label, item)
     close()
   }
 
@@ -414,20 +498,21 @@ function SalesItemContextMenu({ position, onClose, onDelete, onAddLabor, onAddPa
         <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onDelete(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-red-50 hover:text-red-700">
           <Trash2 size={14} className="text-gray-400" />삭제
         </button>
-        <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onAddLabor(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
+        {profile.allowLaborAdd && <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onAddLabor(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
           <Plus size={14} className="text-gray-400" />공임추가
-        </button>
-        <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onAddPart(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
+        </button>}
+        {profile.allowPartAdd && <button type="button" onMouseEnter={() => { setOpenMenu(null); setOpenSubMenu(null) }} onClick={() => { onAddPart(); close() }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
           <Plus size={14} className="text-gray-400" />부품추가
-        </button>
+        </button>}
         <div className="my-1 border-t border-gray-100" />
-        {menuGroups.map(({ label, icon: Icon, items }) => (
+        {menuGroups.map(({ label, icon: Icon, items, disabled = false }) => (
           <div key={label} className="relative">
             <button
               type="button"
+              disabled={disabled}
               onMouseEnter={() => { setOpenMenu(label); setOpenSubMenu(null) }}
-              onClick={() => { setOpenMenu((current) => current === label ? null : label); setOpenSubMenu(null) }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700"
+              onClick={() => { if (!disabled) { setOpenMenu((current) => current === label ? null : label); setOpenSubMenu(null) } }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
             >
               <Icon size={14} className="text-gray-400" />
               <span className="flex-1">{label}</span>
@@ -435,29 +520,66 @@ function SalesItemContextMenu({ position, onClose, onDelete, onAddLabor, onAddPa
             </button>
             {openMenu === label && (
               <div className="absolute left-full top-0 ml-1 min-w-48 rounded-md border border-gray-200 bg-white py-1 shadow-xl">
-                {items.map(({ label: itemLabel, icon: ItemIcon, subItems }) => (
+                {items.map((item) => {
+                  const { label: itemLabel, icon: ItemIcon, subItems, disabled: itemDisabled = false } = item
+                  return (
                   <div key={itemLabel} className="relative">
                     <button
                       type="button"
-                      onMouseEnter={() => setOpenSubMenu(subItems?.length ? itemLabel : null)}
-                      onClick={() => subItems?.length ? setOpenSubMenu((current) => current === itemLabel ? null : itemLabel) : run(itemLabel)}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700"
+                      disabled={itemDisabled}
+                      onMouseEnter={() => {
+                        setOpenSubMenu(subItems?.length ? itemLabel : null)
+                        setOpenNestedSubMenu(null)
+                      }}
+                      onClick={() => { if (!itemDisabled) { subItems?.length ? setOpenSubMenu((current) => current === itemLabel ? null : itemLabel) : run(itemLabel, item) } }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
                     >
                       <ItemIcon size={14} className="text-gray-400" />
                       <span className="flex-1">{itemLabel}</span>
                       {subItems?.length ? <ChevronDown size={12} className="-rotate-90 text-gray-400" /> : null}
                     </button>
                     {openSubMenu === itemLabel && subItems?.length && (
-                      <div className="absolute left-full top-0 ml-1 min-w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-xl">
-                        {subItems.map(({ label: subLabel, icon: SubIcon }) => (
-                          <button key={subLabel} type="button" onClick={() => run(subLabel)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700">
-                            <SubIcon size={14} className="text-gray-400" />{subLabel}
-                          </button>
-                        ))}
+                      <div className="absolute left-full top-0 ml-1 min-w-40 overflow-visible rounded-md border border-gray-200 bg-white py-1 shadow-xl">
+                        {subItems.map((subItem) => {
+                          const { label: subLabel, icon: SubIcon, subItems: nestedItems } = subItem
+                          return (
+                            <div key={subLabel} className="relative">
+                              <button
+                                type="button"
+                                onMouseEnter={() => setOpenNestedSubMenu(nestedItems?.length ? subLabel : null)}
+                                onClick={() => nestedItems?.length ? setOpenNestedSubMenu((current) => current === subLabel ? null : subLabel) : run(subLabel, subItem)}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700"
+                              >
+                                <SubIcon size={14} className="text-gray-400" />
+                                <span className="flex-1 whitespace-nowrap">{subLabel}</span>
+                                {nestedItems?.length ? <ChevronDown size={12} className="-rotate-90 text-gray-400" /> : null}
+                              </button>
+                              {openNestedSubMenu === subLabel && nestedItems?.length ? (
+                                <div className="absolute left-full top-0 ml-1 min-w-64 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-xl">
+                                  {nestedItems.map((nestedItem) => {
+                                    const NestedIcon = nestedItem.icon
+                                    return (
+                                      <button
+                                        key={nestedItem.value ?? nestedItem.label}
+                                        type="button"
+                                        onClick={() => run(nestedItem.label, nestedItem)}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-green-50 hover:text-green-700"
+                                      >
+                                        <NestedIcon size={14} className="text-gray-400" />
+                                        <span className="whitespace-nowrap">{nestedItem.label}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -488,7 +610,7 @@ function ItemColumnSettingsModal({ columns, onToggle, onWidth, onReset, onClose 
   )
 }
 
-function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carNo, carName, laborRates, onOpenLaborItems, onOpenPaintItems, onOpenChemicalItems, onOpenEstimateItems, onOpenPartsPurchase, onOpenInventoryParts, onOpenVehicleSetWork, onOpenMySet, onOpenPreventiveItems, onOpenRepairHistory, onOpenPhotoViewer, onOpenPrintFormat }) {
+function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, profile, carNo, carName, laborRates, onOpenLaborItems, onOpenPaintItems, onOpenChemicalItems, onOpenEstimateItems, onOpenInsuranceEstimate2017, onOpenPartsPurchase, onOpenInventoryParts, onOpenVehicleSetWork, onOpenMySet, onOpenPreventiveItems, onOpenRepairHistory, onOpenPhotoViewer, onOpenPrintFormat }) {
   const alert = useAlert()
   const [arrangeMode, setArrangeMode] = useState('블록')
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -503,8 +625,9 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
   const [aiEstimateOpen, setAiEstimateOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState(null)
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
-  const [itemColumnConfig, setItemColumnConfig] = useState(loadItemColumnConfig)
+  const [itemColumnConfig, setItemColumnConfig] = useState(() => loadItemColumnConfig(profile))
   const itemTableScrollRef = useRef(null)
+  const itemColumnProfileRef = useRef(profile.code)
   const totals = useMemo(() => rows.reduce((acc, row) => ({
     part: acc.part + Number(row.partAmt || 0),
     labor: acc.labor + Number(row.laborAmt || 0),
@@ -521,8 +644,14 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
   }, [pendingFocus, rows])
 
   useEffect(() => {
-    globalThis.localStorage?.setItem(ITEM_COLUMN_STORAGE_KEY, JSON.stringify(itemColumnConfig))
-  }, [itemColumnConfig])
+    if (itemColumnProfileRef.current !== profile.code) return
+    globalThis.localStorage?.setItem(getItemColumnStorageKey(profile), JSON.stringify(itemColumnConfig))
+  }, [itemColumnConfig, profile.code])
+
+  useEffect(() => {
+    itemColumnProfileRef.current = profile.code
+    setItemColumnConfig(loadItemColumnConfig(profile))
+  }, [profile.code])
 
   const updateItemColumns = (updater) => {
     const scrollLeft = itemTableScrollRef.current?.scrollLeft ?? 0
@@ -533,7 +662,7 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
   }
   const toggleItemColumn = (key) => updateItemColumns((prev) => prev.map((column) => column.key === key ? { ...column, visible: !column.visible } : column))
   const resizeItemColumn = (key, amount) => updateItemColumns((prev) => prev.map((column) => column.key === key ? { ...column, width: `${Math.max(52, Math.min(360, Number.parseInt(column.width, 10) + amount))}px` } : column))
-  const resetItemColumns = () => updateItemColumns(cloneItemColumnDefaults())
+  const resetItemColumns = () => updateItemColumns(getDefaultItemColumnConfig(profile))
 
   const parseMoney = (value) => Number(String(value ?? '').replace(/[^0-9-]/g, '')) || 0
   const rateForWork = (work) => {
@@ -740,11 +869,16 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
     setSelectedId(nextRows.at(-1)?.id ?? null)
   }
 
-  const handleMenuItem = (itemLabel) => {
+  const handleMenuItem = (itemLabel, item) => {
+    if (item?.action === 'basicMaintenance') {
+      addBasicMaintenanceRow(item)
+      return
+    }
     if (itemLabel === '공임항목') onOpenLaborItems?.()
     if (itemLabel === '도장항목') onOpenPaintItems?.()
     if (itemLabel === '케미칼항목') onOpenChemicalItems?.()
     if (itemLabel === '견적항목') onOpenEstimateItems?.()
+    if (itemLabel === '보험견적2017') onOpenInsuranceEstimate2017?.()
     if (itemLabel === '기본정비항목') setBasicMenuOpen(true)
     if (itemLabel === '작업지시서') setWorkOrderOpen(true)
     if (itemLabel === 'AI 견적') setAiEstimateOpen(true)
@@ -759,7 +893,7 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
   }
 
   const cellInputClass = 'h-8 w-full min-w-0 rounded-sm border border-transparent bg-transparent px-1 text-sm text-gray-800 outline-none focus:border-gray-300 focus:bg-white focus:ring-1 focus:ring-green-600/20'
-  const renderCellInput = (row, key, { align = 'left', numeric = false, decimal = false, moneyValue = false, maxLength, expandHorizontal = false } = {}) => (
+  const renderCellInput = (row, key, { align = 'left', numeric = false, decimal = false, moneyValue = false, maxLength, expandHorizontal = false, flush = false } = {}) => (
     <input
       id={`item-${row.id}-${key}`}
       value={moneyValue ? (row[key] ? money(Number(row[key])) : '') : (row[key] ?? '')}
@@ -775,13 +909,13 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
       onDragStart={(event) => event.stopPropagation()}
       maxLength={maxLength}
       autoComplete="off"
-      className={`${cellInputClass} ${expandHorizontal ? '-mx-1 w-[calc(100%+0.5rem)]' : ''} ${align === 'right' ? 'text-right tabular-nums' : align === 'center' ? 'text-center' : 'text-left'}`}
+      className={`${cellInputClass} ${flush ? '!px-0' : ''} ${expandHorizontal ? '-mx-1 w-[calc(100%+0.5rem)]' : ''} ${align === 'right' ? 'text-right tabular-nums' : align === 'center' ? 'text-center' : 'text-left'}`}
     />
   )
 
   const columns = [
     { key: 'kind', title: '구분', width: '58px', align: 'center', className: '!px-1.5', headerClassName: '!px-1.5', render: (value) => <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${KIND_STYLE[value]}`}>{value}</span> },
-    { key: 'manufacturerCode', title: '제작사품번', width: '135px', className: '!px-1.5', render: (value, row) => row.kind === '#부품' ? renderCellInput(row, 'manufacturerCode') : value || '-' },
+    { key: 'manufacturerCode', title: '제작사품번', width: '135px', className: '!px-1.5', headerClassName: '!px-1.5', render: (value, row) => row.kind === '#부품' ? renderCellInput(row, 'manufacturerCode', { flush: true }) : value || '-' },
     { key: 'content', title: '작업내용', width: '280px', className: '!px-1.5', render: (value, row) => row.kind?.startsWith('#') ? renderCellInput(row, 'content', { expandHorizontal: true }) : value },
     { key: 'work', title: '작업', width: '70px', align: 'center', className: '!px-1.5', render: (value, row) => row.kind === '#공임' ? (
       <button
@@ -880,19 +1014,19 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
             </>
           )}
         </div>
-        <Button size="sm" onClick={() => addManualRow('#공임')}><Plus size={13} />공임추가</Button>
-        <Button size="sm" onClick={() => addManualRow('#부품')}><Plus size={13} />부품추가</Button>
-        <div className="relative">
+        {profile.allowLaborAdd && <Button size="sm" onClick={() => addManualRow('#공임')}><Plus size={13} />공임추가</Button>}
+        {profile.allowPartAdd && <Button size="sm" onClick={() => addManualRow('#부품')}><Plus size={13} />부품추가</Button>}
+        {profile.allowLabor && <div className="relative">
           <ToolbarMenu id="item-labor" label="공임" icon={Wrench} items={LABOR_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
-          <BasicMaintenanceMenu
+          <BasicMaintenanceModal
             open={basicMenuOpen}
             onClose={() => setBasicMenuOpen(false)}
             onItemClick={addBasicMaintenanceRow}
           />
-        </div>
-        <ToolbarMenu id="item-parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
-        <ToolbarMenu id="item-vehicle" label="차량" icon={Car} items={VEHICLE_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
-        <ToolbarMenu id="item-business" label="업무" icon={FileText} items={BUSINESS_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
+        </div>}
+        {profile.allowParts && <ToolbarMenu id="item-parts" label="부품" icon={Search} items={PART_MENU_ITEMS} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />}
+        <ToolbarMenu id="item-vehicle" label="차량" icon={Car} items={profile.allowPreventive ? VEHICLE_MENU_ITEMS : VEHICLE_MENU_ITEMS.filter((item) => item.label !== '예방')} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
+        <ToolbarMenu id="item-business" label="업무" icon={FileText} items={profile.allowClaimBusiness ? BUSINESS_MENU_ITEMS : BUSINESS_MENU_ITEMS.filter((item) => !['견적청구', '중복체크'].includes(item.label))} openMenu={itemToolbarMenu} setOpenMenu={setItemToolbarMenu} size="sm" onItemClick={handleMenuItem} />
         <span className="mx-0.5 h-5 w-px bg-gray-200" />
         <span className="text-[11px] text-gray-400">자리이동</span>
         <SegmentToggle value={arrangeMode} onChange={setArrangeMode} options={['블록', '자유']} />
@@ -945,6 +1079,7 @@ function ItemsSection({ rows, setRows, selectedId, setSelectedId, workType, carN
       {contextMenu && (
         <SalesItemContextMenu
           position={contextMenu}
+          profile={profile}
           onClose={() => setContextMenu(null)}
           onDelete={removeSelected}
           onAddLabor={() => addManualRow('#공임')}
@@ -1330,13 +1465,13 @@ function SettleField({ label, value, onChange, suffix, readOnly = false, emphasi
   )
 }
 
-function SettlePanel({ claims, settlements, setSettlements, manualCharges, setManualCharges, master }) {
+function SettlePanel({ claims, settlements, setSettlements, manualCharges, setManualCharges, master, items = [], insurance }) {
   const [selectedRowId, setSelectedRowId] = useState(claims[0]?.id ?? '')
   const [vatMenuOpen, setVatMenuOpen] = useState(false)
-  const insurerClaims = claims.filter((claim) => claim.type === 'insurer')
+  const insurerClaims = insurance ? claims.filter((claim) => claim.type === 'insurer') : []
   const hasDeductible = manualCharges.some((row) => row.type === 'deductible')
   const hasVat = manualCharges.some((row) => row.type === 'vat')
-  const rows = [
+  const rows = insurance ? [
     ...claims.map((claim) => {
       const insurerNo = claim.type === 'insurer' ? insurerClaims.findIndex((item) => item.id === claim.id) + 1 : 0
       const detail = settlements[claim.id] ?? INITIAL_SETTLEMENT
@@ -1351,12 +1486,12 @@ function SettlePanel({ claims, settlements, setSettlements, manualCharges, setMa
       }
     }),
     ...manualCharges.map((row) => ({ ...row, amount: amountNumber(row.amount) })),
-  ]
-  const selectedRow = rows.find((row) => row.id === selectedRowId) ?? rows[0]
-  const currentClaim = selectedRow?.source
-  const settlement = selectedRow && (selectedRow.type === 'insurer' || selectedRow.type === 'owner')
-    ? settlements[selectedRow.id] ?? INITIAL_SETTLEMENT
-    : null
+  ] : []
+  const selectedRow = insurance ? (rows.find((row) => row.id === selectedRowId) ?? rows[0]) : { id: 'general', type: 'general' }
+  const currentClaim = insurance ? selectedRow?.source : null
+  const settlement = insurance
+    ? (selectedRow && (selectedRow.type === 'insurer' || selectedRow.type === 'owner') ? settlements[selectedRow.id] ?? INITIAL_SETTLEMENT : null)
+    : settlements.general ?? INITIAL_SETTLEMENT
   const totals = settlement
     ? getSettlementTotals(settlement, currentClaim?.faultRate, currentClaim?.type === 'insurer' ? currentClaim.deductible : 0)
     : null
@@ -1413,6 +1548,7 @@ function SettlePanel({ claims, settlements, setSettlements, manualCharges, setMa
 
   return (
     <div className="flex flex-col gap-3">
+      {insurance && <>
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" disabled={hasDeductible || !insurerClaims.some((claim) => claim.coverage === '자차')} onClick={addDeductible}><Plus size={13} />면책금</Button>
         <div className="relative">
@@ -1446,6 +1582,7 @@ function SettlePanel({ claims, settlements, setSettlements, manualCharges, setMa
           emptyText="정산 Row가 없습니다."
         />
       </div>
+      </>}
 
       {settlement && totals && <>
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-md border border-gray-200 bg-white p-3 max-[1200px]:grid-cols-1">
@@ -1483,17 +1620,18 @@ function SettlePanel({ claims, settlements, setSettlements, manualCharges, setMa
           <SettleField label="부가세" value={money(totals.vat)} readOnly />
         </div>
         <SettleField label="합계" value={money(totals.total)} readOnly emphasize normalLabel />
-        <div className="my-1 border-t border-gray-100" />
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-[1200px]:grid-cols-1">
-          <SettleField label="과실상계율" value={`${Number(currentClaim?.faultRate || 0)} %`} readOnly />
-          <SettleField label="과실상계액" value={money(totals.faultAmt)} readOnly />
-          <SettleField label="면책금" value={currentClaim?.type === 'insurer' ? currentClaim.deductible : '0'} readOnly />
-          <SettleField label="청구금액" value={money(totals.claimAmt)} readOnly emphasize red />
-        </div>
+        {insurance && <><div className="my-1 border-t border-gray-100" />
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-[1200px]:grid-cols-1">
+            <SettleField label="과실상계율" value={`${Number(currentClaim?.faultRate || 0)} %`} readOnly />
+            <SettleField label="과실상계액" value={money(totals.faultAmt)} readOnly />
+            <SettleField label="면책금" value={currentClaim?.type === 'insurer' ? currentClaim.deductible : '0'} readOnly />
+            <SettleField label="청구금액" value={money(totals.claimAmt)} readOnly emphasize red />
+          </div>
+        </>}
       </div>
       </>}
 
-      {selectedRow && ['deductible', 'vat'].includes(selectedRow.type) && (
+      {insurance && selectedRow && ['deductible', 'vat'].includes(selectedRow.type) && (
         <div className="flex flex-col gap-3 rounded-md border border-gray-200 bg-white p-3">
           <div>
             <div className="text-sm font-semibold text-gray-800">{selectedRow.kind}</div>
@@ -1524,6 +1662,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [printFormatOpen, setPrintFormatOpen] = useState(false)
   const [estimateItemsOpen, setEstimateItemsOpen] = useState(false)
+  const [insuranceEstimate2017Open, setInsuranceEstimate2017Open] = useState(false)
   const [partsPurchaseOpen, setPartsPurchaseOpen] = useState(false)
   const [inventoryPartsOpen, setInventoryPartsOpen] = useState(false)
   const [vehicleSetWorkOpen, setVehicleSetWorkOpen] = useState(false)
@@ -1532,6 +1671,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
   const [repairHistoryOpen, setRepairHistoryOpen] = useState(false)
 
   const workType = row?.type ?? '보험'
+  const workProfile = resolveWorkProfile(workType)
   const photoWinRef = useRef(null)
   const laborWinRef = useRef(null)
   const paintWinRef = useRef(null)
@@ -1638,41 +1778,56 @@ export default function SalesDetailEditPage({ row, onBack }) {
   const safeClaimIdx = Math.min(claimIdx, claims.length - 1)
   const railTabs = [
     { id: 'labor', label: '공임설정', background: '#bfdbfe', selectedBackground: '#93c5fd', accent: '#1d4ed8' },
-    { id: 'claim', label: '청구처', background: '#fde68a', selectedBackground: '#fcd34d', accent: '#b45309' },
-    { id: 'settle', label: '견적정산', background: '#a7f3d0', selectedBackground: '#6ee7b7', accent: '#047857' },
+    ...(workProfile.insurance ? [{ id: 'claim', label: '청구처', background: '#fde68a', selectedBackground: '#fcd34d', accent: '#b45309' }] : []),
+    { id: 'settle', label: '수리비 정산', background: '#a7f3d0', selectedBackground: '#6ee7b7', accent: '#047857' },
   ]
+
+  useEffect(() => {
+    if (!railTabs.some((tab) => tab.id === sidePanel.tab)) setSidePanel((prev) => ({ ...prev, tab: 'settle' }))
+  }, [workProfile.code])
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-50" onKeyDown={focusNextOnEnter}>
-      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 bg-white px-4 py-2.5">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-800">매출내역</h2>
-          <p className="mt-0.5 text-xs text-gray-400">RONO : {row?.id ?? '신규'} · 매출_보험</p>
-        </div>
-        <div className="flex self-center items-center gap-2">
-          <Button onClick={() => setPaymentOpen(true)}><Banknote size={14} />입금</Button>
-          <Button variant="primary"><Save size={14} />저장</Button>
-          <div className="-mr-2 ml-2 flex shrink-0 items-center border-l border-gray-200 pl-[11px]">
+      <PageHeader
+        title={(
+          <span className="inline-flex min-w-0 items-center gap-1">
             <button
               type="button"
               onClick={onBack}
-              className="inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+              className="shrink-0 rounded-sm text-gray-500 transition-colors hover:text-green-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
             >
-              매출일지<ArrowRight size={14} />
+              매출일지
             </button>
-          </div>
-        </div>
-      </div>
+            <ChevronRight size={15} className="shrink-0 text-gray-300" />
+            <span className="truncate text-gray-800">매출내역</span>
+          </span>
+        )}
+        description={`RONO : ${row?.id ?? '신규'} · 매출_${workProfile.label}`}
+        icon={ClipboardList}
+        actions={(
+          <>
+            <Button onClick={() => setPaymentOpen(true)}>
+              <Banknote size={14} />
+              입금
+            </Button>
+            <Button variant="primary">
+              <Save size={14} />
+              저장
+            </Button>
+          </>
+        )}
+      />
 
       <div className="flex min-h-0 flex-1 overflow-x-auto">
         <div className="flex min-w-[720px] flex-1 flex-col">
-          <ReceptionSection master={master} setMaster={setMaster} onOpenVehicleName={() => setVehicleNameOpen(true)} onOpenCompany={() => setCompanyOpen(true)} onOpenCustomer={() => setCustomerOpen(true)} onOpenVehicleRegistry={openVehicleRegistry} onOpenSpecification={openVehicleSpecification} />
+          <ReceptionSection master={master} setMaster={setMaster} profile={workProfile} onOpenVehicleName={() => setVehicleNameOpen(true)} onOpenCompany={() => setCompanyOpen(true)} onOpenCustomer={() => setCustomerOpen(true)} onOpenVehicleRegistry={openVehicleRegistry} onOpenSpecification={openVehicleSpecification} />
           <ItemsSection
             rows={items}
             setRows={setItems}
             selectedId={selectedItemId}
             setSelectedId={setSelectedItemId}
             workType={workType}
+            profile={workProfile}
             carNo={master.carNo}
             carName={master.carName}
             laborRates={{ detach: master.detachRate, sheet: master.sheetRate, paint: master.paintRate }}
@@ -1680,6 +1835,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
             onOpenPaintItems={openPaintItems}
             onOpenChemicalItems={openChemicalItems}
             onOpenEstimateItems={() => setEstimateItemsOpen(true)}
+            onOpenInsuranceEstimate2017={() => setInsuranceEstimate2017Open(true)}
             onOpenPartsPurchase={() => setPartsPurchaseOpen(true)}
             onOpenInventoryParts={() => setInventoryPartsOpen(true)}
             onOpenVehicleSetWork={() => setVehicleSetWorkOpen(true)}
@@ -1715,8 +1871,8 @@ export default function SalesDetailEditPage({ row, onBack }) {
           {sidePanel.open && (
             <div className="@container min-w-0 max-w-[500px] flex-1 overflow-auto rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
               {sidePanel.tab === 'labor' && <LaborSettingsPanel master={master} setMaster={setMaster} workType={workType} />}
-              {sidePanel.tab === 'claim' && <ClaimPanel claims={claims} setClaims={setClaims} selectedIdx={safeClaimIdx} setSelectedIdx={setClaimIdx} master={master} workType={workType} />}
-              {sidePanel.tab === 'settle' && <SettlePanel claims={claims} settlements={settlements} setSettlements={setSettlements} manualCharges={manualCharges} setManualCharges={setManualCharges} master={master} />}
+              {sidePanel.tab === 'claim' && workProfile.insurance && <ClaimPanel claims={claims} setClaims={setClaims} selectedIdx={safeClaimIdx} setSelectedIdx={setClaimIdx} master={master} workType={workType} />}
+              {sidePanel.tab === 'settle' && <SettlePanel claims={claims} settlements={settlements} setSettlements={setSettlements} manualCharges={manualCharges} setManualCharges={setManualCharges} master={master} items={items} insurance={workProfile.insurance} />}
             </div>
           )}
         </div>
@@ -1730,6 +1886,7 @@ export default function SalesDetailEditPage({ row, onBack }) {
       {paymentOpen && <PaymentModal sale={{ ...row, id: row?.id ?? '신규', type: row?.type ?? '보험', carNo: master.carNo, customer: master.customer }} onClose={() => setPaymentOpen(false)} />}
       {printFormatOpen && <PrintFormatModal menuCode="0201" menuName="매출일지" onClose={() => setPrintFormatOpen(false)} />}
       {estimateItemsOpen && <EstimateItemsModal vehicle={{ carNo: master.carNo, carName: master.carName }} onClose={() => setEstimateItemsOpen(false)} onApply={(estimateRows) => appendSuggestedRows(estimateRows, 'estimate')} />}
+      {insuranceEstimate2017Open && <InsuranceEstimate2017Modal onClose={() => setInsuranceEstimate2017Open(false)} />}
       {partsPurchaseOpen && <PartsPurchaseModal onClose={() => setPartsPurchaseOpen(false)} onApply={(partRow) => appendSuggestedRows([partRow], 'purchase')} />}
       {inventoryPartsOpen && <InventoryPartsModal vehicleName={master.carName} onClose={() => setInventoryPartsOpen(false)} onApply={(partRow) => appendSuggestedRows([partRow], 'inventory')} />}
       {vehicleSetWorkOpen && <VehicleSetWorkModal vehicle={{ vin: master.vin, carName: master.carName }} onClose={() => setVehicleSetWorkOpen(false)} onApply={(setWorkRows) => appendSuggestedRows(setWorkRows, 'vehicle-set-work')} />}
